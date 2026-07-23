@@ -4,6 +4,8 @@ Reversi/Othello als Progressive Web App: läuft in jedem modernen Browser und
 lässt sich unter Android wie eine App installieren. Keine Abhängigkeiten,
 kein Build-Schritt – nur statische Dateien.
 
+**▶ Live spielen: https://hathi1976-max.github.io/reversi-hth/**
+
 ## Funktionen
 
 - **Gegen Computer** mit 4 Schwierigkeitsstufen:
@@ -32,14 +34,17 @@ Dann im Browser `http://localhost:8173` öffnen.
 
 ## Auf Android installieren
 
-PWA-Installation setzt **HTTPS** voraus. Die Dateien dieses Ordners auf einen
-statischen Hoster legen, z. B. GitHub Pages, Netlify oder Cloudflare Pages
-(alle kostenlos, einfach Ordner hochladen). Danach:
+Diese App wird bereits per HTTPS über GitHub Pages ausgeliefert:
+**https://hathi1976-max.github.io/reversi-hth/**
 
 1. Die URL in Chrome auf dem Android-Gerät öffnen.
 2. Menü (⋮) → **„App installieren"** bzw. **„Zum Startbildschirm hinzufügen"**.
 3. Reversi startet dann im Vollbild wie eine native App und funktioniert
    auch offline.
+
+> Hinweis für eigenes Hosting: PWA-Installation setzt **HTTPS** voraus. Die
+> Dateien dieses Ordners lassen sich alternativ auf jeden statischen Hoster
+> legen (Netlify, Cloudflare Pages o. ä.).
 
 ## Dateien
 
