@@ -1,0 +1,55 @@
+# Reversi – Web-App & Android (PWA)
+
+Reversi/Othello als Progressive Web App: läuft in jedem modernen Browser und
+lässt sich unter Android wie eine App installieren. Keine Abhängigkeiten,
+kein Build-Schritt – nur statische Dateien.
+
+## Funktionen
+
+- **Gegen Computer** mit 4 Schwierigkeitsstufen:
+  - *Leicht* – zufällige Züge
+  - *Mittel* – 2 Züge Vorausberechnung
+  - *Schwer* – 4 Züge, Endspiel wird exakt ausgerechnet
+  - *Experte* – 6 Züge, größeres exaktes Endspiel
+- **Zwei Spieler** am selben Gerät (abwechselnd tippen)
+- **Demo**: Computer gegen Computer, mit Pause-Taste
+- **Zwei Steinpaletten**: klassisch Schwarz/Weiß oder Rot/Blau (Wahl wird gespeichert)
+- Zughilfen (grüne Punkte), letzter Zug markiert, „Zug zurück", Passen-Hinweis
+- Offline-fähig dank Service Worker
+
+Details: [SPIELEIGENSCHAFTEN.md](SPIELEIGENSCHAFTEN.md) (Nutzersicht) und
+[ENTWICKLUNG.md](ENTWICKLUNG.md) (Technik).
+
+## Lokal starten
+
+Im Projektordner:
+
+```
+py -m http.server 8173
+```
+
+Dann im Browser `http://localhost:8173` öffnen.
+
+## Auf Android installieren
+
+PWA-Installation setzt **HTTPS** voraus. Die Dateien dieses Ordners auf einen
+statischen Hoster legen, z. B. GitHub Pages, Netlify oder Cloudflare Pages
+(alle kostenlos, einfach Ordner hochladen). Danach:
+
+1. Die URL in Chrome auf dem Android-Gerät öffnen.
+2. Menü (⋮) → **„App installieren"** bzw. **„Zum Startbildschirm hinzufügen"**.
+3. Reversi startet dann im Vollbild wie eine native App und funktioniert
+   auch offline.
+
+## Dateien
+
+| Datei                  | Zweck                                    |
+| ---------------------- | ---------------------------------------- |
+| `index.html`           | Oberfläche (Menü, Brett, Dialoge)        |
+| `style.css`            | Gestaltung, responsiv & touch-optimiert  |
+| `app.js`               | Spielregeln, KI (Alpha-Beta-Suche), UI   |
+| `manifest.webmanifest` | PWA-Manifest für die Android-Installation|
+| `sw.js`                | Service Worker (Offline-Cache)           |
+| `icons/`               | App-Icons (192 px, 512 px)               |
+| `SPIELEIGENSCHAFTEN.md`| Funktionsumfang aus Nutzersicht          |
+| `ENTWICKLUNG.md`       | Technische Dokumentation                 |

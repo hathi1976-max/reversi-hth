@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a2f23">
+  <meta name="description" content="Reversi (Othello) – gegen den Computer, zu zweit oder als Demo.">
+  <title>Reversi</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ===== Menü ===== -->
+  <div id="menu" class="overlay visible">
+    <div class="panel">
+      <h1 class="title">Reversi</h1>
+      <p class="subtitle">Othello · Strategie für zwei</p>
+
+      <div class="section">
+        <div class="section-label">Spielmodus</div>
+        <div class="btn-group" id="mode-group">
+          <button class="opt selected" data-mode="pvc">Gegen Computer</button>
+          <button class="opt" data-mode="pvp">Zwei Spieler</button>
+          <button class="opt" data-mode="demo">Demo (KI vs. KI)</button>
+        </div>
+      </div>
+
+      <div class="section" id="level-section">
+        <div class="section-label">Schwierigkeit</div>
+        <div class="btn-group" id="level-group">
+          <button class="opt" data-level="1">Leicht</button>
+          <button class="opt selected" data-level="2">Mittel</button>
+          <button class="opt" data-level="3">Schwer</button>
+          <button class="opt" data-level="4">Experte</button>
+        </div>
+      </div>
+
+      <div class="section" id="color-section">
+        <div class="section-label">Deine Farbe</div>
+        <div class="btn-group" id="color-group">
+          <button class="opt selected" data-color="1"><span class="mini-disc black"></span> <span id="color-label-black">Schwarz (beginnt)</span></button>
+          <button class="opt" data-color="2"><span class="mini-disc white"></span> <span id="color-label-white">Weiß</span></button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Steinfarben</div>
+        <div class="btn-group" id="palette-group">
+          <button class="opt selected" data-palette="classic"><span class="mini-disc fix-black"></span><span class="mini-disc fix-white"></span> Schwarz/Weiß</button>
+          <button class="opt" data-palette="redblue"><span class="mini-disc fix-red"></span><span class="mini-disc fix-blue"></span> Rot/Blau</button>
+        </div>
+      </div>
+
+      <button id="btn-start" class="primary">Spiel starten</button>
+      <p class="hint-text">Tipp: Grüne Punkte zeigen deine möglichen Züge.</p>
+    </div>
+  </div>
+
+  <!-- ===== Spiel ===== -->
+  <main id="game" hidden>
+    <header class="topbar">
+      <div class="player-chip" id="chip-black">
+        <span class="mini-disc black"></span>
+        <span class="chip-name" id="name-black">Schwarz</span>
+        <span class="chip-score" id="score-black">2</span>
+      </div>
+      <div class="turn-indicator" id="turn-indicator">Schwarz ist am Zug</div>
+      <div class="player-chip" id="chip-white">
+        <span class="mini-disc white"></span>
+        <span class="chip-name" id="name-white">Weiß</span>
+        <span class="chip-score" id="score-white">2</span>
+      </div>
+    </header>
+
+    <div id="board-wrap">
+      <div id="board" aria-label="Spielbrett"></div>
+    </div>
+
+    <footer class="controls">
+      <button id="btn-menu">Menü</button>
+      <button id="btn-undo">Zug zurück</button>
+      <button id="btn-restart">Neustart</button>
+      <button id="btn-pause" hidden>Pause</button>
+    </footer>
+  </main>
+
+  <!-- ===== Spielende ===== -->
+  <div id="gameover" class="overlay">
+    <div class="panel">
+      <h2 id="result-title">Spiel beendet</h2>
+      <div class="final-score">
+        <div class="final-side">
+          <span class="mini-disc black big"></span>
+          <span id="final-black">0</span>
+        </div>
+        <span class="final-vs">:</span>
+        <div class="final-side">
+          <span class="mini-disc white big"></span>
+          <span id="final-white">0</span>
+        </div>
+      </div>
+      <p id="result-text"></p>
+      <button id="btn-rematch" class="primary">Revanche</button>
+      <button id="btn-to-menu">Zum Menü</button>
+    </div>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

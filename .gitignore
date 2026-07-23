@@ -1,0 +1,6 @@
+# Lokale Dev-/Harness-Konfiguration (maschinenspezifische Pfade)
+.claude/
+
+# OS-Kram
+Thumbs.db
+.DS_Store
