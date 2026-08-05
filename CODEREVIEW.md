@@ -26,9 +26,9 @@ Verbesserungen, keine Reparaturen.
 
 > **Behoben.** Die reine Logik liegt jetzt in `engine.js` (ES-Modul, kein DOM),
 > die Suche läuft in `ai-worker.js` als **Modul-Worker**; `app.js` ist auf
-> Zustand, DOM und Zeitsteuerung zusammengeschrumpft (525 → 380 Zeilen) und wird
-> als `type="module"` geladen. `sw.js`: `CACHE` auf `reversi-v3`, `engine.js`
-> und `ai-worker.js` in `ASSETS`.
+> Zustand, DOM und Zeitsteuerung zusammengeschrumpft (573 → 409 Zeilen, durch
+> A2 und D später wieder auf 516) und wird als `type="module"` geladen.
+> `sw.js`: `CACHE` auf `reversi-v3`, `engine.js` und `ai-worker.js` in `ASSETS`.
 >
 > **Abweichung 1 — zwei Dateien statt einer `ai.js`:** Die Logik wird an drei
 > Stellen gebraucht (Oberfläche, Worker, Tests). Ein klassisches Worker-Skript
