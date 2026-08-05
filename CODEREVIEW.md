@@ -22,7 +22,36 @@ Verbesserungen, keine Reparaturen.
 
 ## A. Wichtig
 
-### A1. Die KI blockiert den Hauptthread
+### A1. Die KI blockiert den Hauptthread — ✅ erledigt 05.08.2026
+
+> **Behoben.** Die reine Logik liegt jetzt in `engine.js` (ES-Modul, kein DOM),
+> die Suche läuft in `ai-worker.js` als **Modul-Worker**; `app.js` ist auf
+> Zustand, DOM und Zeitsteuerung zusammengeschrumpft (525 → 380 Zeilen) und wird
+> als `type="module"` geladen. `sw.js`: `CACHE` auf `reversi-v3`, `engine.js`
+> und `ai-worker.js` in `ASSETS`.
+>
+> **Abweichung 1 — zwei Dateien statt einer `ai.js`:** Die Logik wird an drei
+> Stellen gebraucht (Oberfläche, Worker, Tests). Ein klassisches Worker-Skript
+> lässt sich nicht importieren, deshalb die Trennung in `engine.js` (Modul, von
+> allen dreien importiert) und `ai-worker.js` (nur Nachrichtenverarbeitung,
+> 20 Zeilen).
+>
+> **Abweichung 2 — `minDelay` bleibt:** Punkt 4 wollte die ehrliche Denkzeit
+> zeigen. Die Mindestdauer ist aber kein Kaschieren, sondern Absicht: In der
+> Demo wären die Züge sonst nicht mitzulesen, und gegen den Computer wirkt eine
+> Antwort nach 3 ms wie ein Aussetzer. Sie blockiert jetzt nichts mehr, weil sie
+> neben der Rechnung läuft statt vor ihr.
+>
+> **Zusätzlich:** Fällt der Worker aus (kein Modul-Worker, Ladefehler), rechnet
+> `app.js` im Hauptthread weiter — die App bleibt spielbar. `sessionEntwerten()`
+> beendet einen rechnenden Worker bei Neustart/Menü, sonst wartet der nächste
+> Zug hinter der alten Rechnung.
+>
+> **Gleichheit belegt:** 360 Vergleiche (120 gesäte Stellungen × Stufen 2/3/4)
+> alt gegen neu **0 Abweichungen**, 11 gesäte Partien (658 Züge) Zug für Zug
+> identisch, Laufzeit unverändert (Stufe 4: 5221 ms → 4905 ms über alle
+> Stellungen, im Rahmen der Messstreuung). `tests/worker.test.js` prüft, dass
+> der Worker lädt, antwortet und die Sitzungsnummer zurückreicht.
 
 **Wo:** `scheduleAI` (`:388-397`) ruft `bestMove` (`:165-201`) synchron auf.
 
@@ -169,7 +198,34 @@ Faktor 2–3. Nur angehen, wenn nach A1 noch Bedarf an Spielstärke besteht.
 
 ## C. Wartbarkeit
 
-### C1. Keine Tests, obwohl die Logik dafür gemacht ist
+### C1. Keine Tests, obwohl die Logik dafür gemacht ist — ✅ erledigt 05.08.2026
+
+> **Behoben.** `tests/test.html` mit eigenem, abhängigkeitsfreiem Läufer
+> (`tests/lauf.js`, Aufbau aus `claude-wegpunkte` übernommen) lädt `engine.js`
+> als Modul — kein Build, kein node. **64 Tests, alle grün.**
+> Aufteilung: `regeln.test.js` (42), `ki.test.js` (19), `worker.test.js` (3).
+>
+> Alle im Review geforderten Fälle sind abgedeckt: Startstellung mit den vier
+> Zügen 19/26/37/44, `flipsFor` in allen acht Richtungen je mit Treffer,
+> Nicht-Treffer und direktem eigenen Nachbarn, drei Fälle gegen den Überlauf
+> über die Zeilengrenze (Feld 8 nach links, Feld 15 nach rechts, Diagonale über
+> die Ecke) samt Gegenprobe, Passsituation, beidseitiges Passen und
+> `finalScore` aus Sicht beider Farben.
+>
+> **Abweichung — Passregel:** Der Review wollte `advanceTurn` testen, das steckt
+> aber in der Oberfläche. Die Entscheidung ist deshalb als reine Funktion
+> `zugrechtNach(board, current)` nach `engine.js` gewandert; `advanceTurn` ruft
+> sie nur noch auf. Damit ist die Regel testbar, statt sie im Test nachzubauen.
+>
+> **Zusätzlich:** Antisymmetrie von `evaluate`, Spiegelsymmetrie der
+> Gewichtstabelle, `search` bei Tiefe 0 gleich `evaluate`, Passen ohne
+> Tiefenverbrauch, `bestMove` lässt das übergebene Brett unverändert, und eine
+> durchgespielte Partie Mittel gegen Mittel.
+>
+> **Automatisierter Lauf:** `tests/test.html?melde=<pfad>` schickt das Ergebnis
+> zusätzlich per POST dorthin — nötig, weil Kommandozeilen-Browser sich beim
+> `load`-Ereignis beenden und damit mitten in den Worker-Tests. Ohne Parameter
+> ändert sich nichts.
 
 `flipsFor`, `legalMoves`, `applyMove`, `countDiscs`, `finalScore` und `evaluate`
 sind reine Funktionen über einem `Uint8Array`. Nach A1 liegen sie ohnehin in
@@ -187,7 +243,27 @@ einer eigenen Datei.
 - Beidseitiges Passen → `state.over === true`
 - `finalScore` Vorzeichen aus Sicht beider Farben
 
-### C2. Suchparameter mehrfach verankert
+### C2. Suchparameter mehrfach verankert — ✅ erledigt 05.08.2026
+
+> **Behoben.** Alle Zahlen der KI stehen in `CONFIG` (`engine.js`), jede mit
+> Kommentar: `gewichte`, `eckenGewicht`, `eckenBonus`, `mobilitaet`,
+> `steindifferenz`, `endspielFelder`, `endstandSkala`, `endspielReserve`,
+> `stufen`, `standardStufe`. `CORNERS` ist verschwunden — die Eckfelder werden
+> aus den Gewichten abgeleitet (`ECKEN`, Test hält `[0, 7, 56, 63]` fest).
+> Über dem Objekt steht die im Abschnitt D geforderte Skalentabelle von
+> `evaluate` (Feldgewichte ±150, Ecken ±400, Mobilität ±90, Endspiel ±3.800,
+> `finalScore` ×100.000).
+>
+> **Abweichung — die beiden Endspielzahlen bleiben getrennt:** Der Review sah
+> `evaluate:108` (`empty <= 10`) und `LEVELS[*].exact` als dieselbe Information.
+> Das sind sie nicht: `endspielFelder` schaltet die **Bewertung** auf Steinzahl
+> um, `stufen[*].exact` entscheidet über die **Suchtiefe**, und `exact` ist je
+> Stufe anders (0/6/10/13). Dass Stufe „Schwer" ebenfalls bei 10 liegt, ist
+> Zufall. Beide stehen jetzt in `CONFIG` nebeneinander, mit einem Kommentar,
+> der die Verwechslung ausschließt.
+>
+> **Kein Verhaltenswechsel belegt:** dieselben 360 Stellungsvergleiche und
+> 11 Partien wie bei A1 — 0 Abweichungen.
 
 `WEIGHTS` dient gleichzeitig als Bewertung **und** als Zugsortierung (`:143`,
 `:186`), `CORNERS` (`:95`) verdoppelt Information, die schon in `WEIGHTS` steckt

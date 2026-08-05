@@ -52,7 +52,10 @@ Diese App wird bereits per HTTPS über GitHub Pages ausgeliefert:
 | ---------------------- | ---------------------------------------- |
 | `index.html`           | Oberfläche (Menü, Brett, Dialoge)        |
 | `style.css`            | Gestaltung, responsiv & touch-optimiert  |
-| `app.js`               | Spielregeln, KI (Alpha-Beta-Suche), UI   |
+| `engine.js`            | Spielregeln und KI (Alpha-Beta-Suche)    |
+| `ai-worker.js`         | Rechnet die Zugsuche im Hintergrund      |
+| `app.js`               | Zustand, DOM und Zeitsteuerung           |
+| `tests/`               | Testlauf im Browser (`tests/test.html`)  |
 | `manifest.webmanifest` | PWA-Manifest für die Android-Installation|
 | `sw.js`                | Service Worker (Offline-Cache)           |
 | `icons/`               | App-Icons (192 px, 512 px)               |

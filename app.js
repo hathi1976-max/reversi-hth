@@ -1,256 +1,16 @@
-"use strict";
-
 /* ============================================================
- * Reversi – Spiellogik
- * Brett: Array mit 64 Feldern. 0 = leer, 1 = Schwarz, 2 = Weiß
+ * Reversi – Oberfläche und Ablaufsteuerung
+ *
+ * Die Spielregeln und die KI liegen in `engine.js`; diese Datei kennt nur
+ * Zustand, DOM und Zeitsteuerung. Die Suche läuft in `ai-worker.js`, damit
+ * die Oberfläche während des Rechnens bedienbar bleibt.
  * ============================================================ */
 
-const EMPTY = 0, BLACK = 1, WHITE = 2;
-const DIRS = [
-  [-1, -1], [-1, 0], [-1, 1],
-  [0, -1],           [0, 1],
-  [1, -1],  [1, 0],  [1, 1],
-];
-
-/**
- * Vorberechnete Strahlen: RAYS[feld][richtung] = Feldindizes vom Feld aus bis
- * zum Brettrand. Damit entfallen im heißesten Schleifenkern die Zeilen-/
- * Spaltenrechnung und die Randprüfung – der Zeilenüberlauf ist schon dadurch
- * ausgeschlossen, dass jeder Strahl am Rand endet.
- */
-const RAYS = (() => {
-  const all = [];
-  for (let i = 0; i < 64; i++) {
-    const r0 = i >> 3, c0 = i & 7;
-    const perField = [];
-    for (const [dr, dc] of DIRS) {
-      const line = [];
-      let r = r0 + dr, c = c0 + dc;
-      while (r >= 0 && r < 8 && c >= 0 && c < 8) { line.push(r * 8 + c); r += dr; c += dc; }
-      perField.push(Uint8Array.from(line));
-    }
-    all.push(perField);
-  }
-  return all;
-})();
-
-function initialBoard() {
-  const b = new Uint8Array(64);
-  b[27] = WHITE; b[28] = BLACK;
-  b[35] = BLACK; b[36] = WHITE;
-  return b;
-}
-
-function opponent(p) { return 3 - p; }
-
-/** Steine, die ein Zug von `p` auf `idx` umdrehen würde (leer = illegal). */
-function flipsFor(board, idx, p) {
-  if (board[idx] !== EMPTY) return [];
-  const opp = opponent(p);
-  const rays = RAYS[idx];
-  const flips = [];
-  for (let d = 0; d < 8; d++) {
-    const ray = rays[d];
-    const len = ray.length;
-    let k = 0;
-    while (k < len && board[ray[k]] === opp) k++;
-    // Nur eingeschlossene Ketten zählen: mindestens ein gegnerischer Stein und
-    // dahinter ein eigener (k < len schließt den Brettrand aus).
-    if (k > 0 && k < len && board[ray[k]] === p) {
-      for (let j = 0; j < k; j++) flips.push(ray[j]);
-    }
-  }
-  return flips;
-}
-
-/**
- * Wie `flipsFor`, aber nur die Ja/Nein-Frage: bricht beim ersten Treffer ab und
- * legt kein Array an. Mobilitätsbewertung und Passprüfung brauchen ausschließlich
- * diese Antwort und laufen in der Suche hunderttausendfach.
- */
-function hasFlip(board, idx, p) {
-  if (board[idx] !== EMPTY) return false;
-  const opp = opponent(p);
-  const rays = RAYS[idx];
-  for (let d = 0; d < 8; d++) {
-    const ray = rays[d];
-    const len = ray.length;
-    let k = 0;
-    while (k < len && board[ray[k]] === opp) k++;
-    if (k > 0 && k < len && board[ray[k]] === p) return true;
-  }
-  return false;
-}
-
-/** Alle legalen Züge als Liste von { idx, flips }. */
-function legalMoves(board, p) {
-  const moves = [];
-  for (let i = 0; i < 64; i++) {
-    if (board[i] !== EMPTY) continue;
-    const flips = flipsFor(board, i, p);
-    if (flips.length) moves.push({ idx: i, flips });
-  }
-  return moves;
-}
-
-/** Anzahl legaler Züge – gleiches Ergebnis wie `legalMoves(...).length`, ohne Allokation. */
-function countMoves(board, p) {
-  let n = 0;
-  for (let i = 0; i < 64; i++) if (hasFlip(board, i, p)) n++;
-  return n;
-}
-
-function hasLegalMove(board, p) {
-  for (let i = 0; i < 64; i++) {
-    if (hasFlip(board, i, p)) return true;
-  }
-  return false;
-}
-
-/** Wendet einen Zug auf eine Kopie des Bretts an. */
-function applyMove(board, idx, flips, p) {
-  const b = board.slice();
-  b[idx] = p;
-  for (const f of flips) b[f] = p;
-  return b;
-}
-
-function countDiscs(board) {
-  let black = 0, white = 0, empty = 0;
-  for (let i = 0; i < 64; i++) {
-    if (board[i] === BLACK) black++;
-    else if (board[i] === WHITE) white++;
-    else empty++;
-  }
-  return { black, white, empty };
-}
-
-/* ============================================================
- * KI – Bewertung und Alpha-Beta-Suche
- * ============================================================ */
-
-// Klassische Positionsgewichte: Ecken stark, Felder daneben gefährlich.
-const WEIGHTS = [
-  120, -25,  16,   8,   8,  16, -25, 120,
-  -25, -45,  -3,  -3,  -3,  -3, -45, -25,
-   16,  -3,   4,   2,   2,   4,  -3,  16,
-    8,  -3,   2,   1,   1,   2,  -3,   8,
-    8,  -3,   2,   1,   1,   2,  -3,   8,
-   16,  -3,   4,   2,   2,   4,  -3,  16,
-  -25, -45,  -3,  -3,  -3,  -3, -45, -25,
-  120, -25,  16,   8,   8,  16, -25, 120,
-];
-const CORNERS = [0, 7, 56, 63];
-
-/** Bewertung aus Sicht von `p` (größer = besser für p). */
-function evaluate(board, p) {
-  const opp = opponent(p);
-  let pos = 0, myDiscs = 0, oppDiscs = 0, empty = 0;
-  for (let i = 0; i < 64; i++) {
-    if (board[i] === p) { pos += WEIGHTS[i]; myDiscs++; }
-    else if (board[i] === opp) { pos -= WEIGHTS[i]; oppDiscs++; }
-    else empty++;
-  }
-
-  // Im Endspiel zählt fast nur noch die Steinzahl.
-  if (empty <= 10) {
-    return (myDiscs - oppDiscs) * 60 + pos;
-  }
-
-  let cornerScore = 0;
-  for (const c of CORNERS) {
-    if (board[c] === p) cornerScore += 100;
-    else if (board[c] === opp) cornerScore -= 100;
-  }
-
-  const myMob = countMoves(board, p);
-  const oppMob = countMoves(board, opp);
-  const mobility = 9 * (myMob - oppMob);
-
-  return pos + cornerScore + mobility;
-}
-
-/** Exakter Endstand aus Sicht von `p`, hoch skaliert damit er alles dominiert. */
-function finalScore(board, p) {
-  const { black, white } = countDiscs(board);
-  const diff = p === BLACK ? black - white : white - black;
-  return diff * 100000;
-}
-
-/** Negamax mit Alpha-Beta-Schnitt. */
-function search(board, p, depth, alpha, beta) {
-  const moves = legalMoves(board, p);
-
-  if (moves.length === 0) {
-    if (!hasLegalMove(board, opponent(p))) return finalScore(board, p);
-    return -search(board, opponent(p), depth, -beta, -alpha);
-  }
-  if (depth <= 0) return evaluate(board, p);
-
-  // Zugsortierung: vielversprechende Felder zuerst → mehr Schnitte.
-  moves.sort((a, b) => WEIGHTS[b.idx] - WEIGHTS[a.idx]);
-
-  let best = -Infinity;
-  for (const m of moves) {
-    const next = applyMove(board, m.idx, m.flips, p);
-    const v = -search(next, opponent(p), depth - 1, -beta, -alpha);
-    if (v > best) best = v;
-    if (v > alpha) alpha = v;
-    if (alpha >= beta) break;
-  }
-  return best;
-}
-
-// Suchtiefe und Schwelle für exaktes Endspiel-Ausrechnen je Stufe.
-const LEVELS = {
-  1: { depth: 0, exact: 0 },   // Leicht: zufälliger Zug
-  2: { depth: 2, exact: 6 },   // Mittel
-  3: { depth: 4, exact: 10 },  // Schwer
-  4: { depth: 6, exact: 13 },  // Experte
-};
-
-/** Besten Zug für Stufe `level` bestimmen. */
-function bestMove(board, p, level) {
-  const moves = legalMoves(board, p);
-  if (moves.length === 0) return null;
-  if (moves.length === 1) return moves[0];
-
-  const cfg = LEVELS[level];
-  if (cfg.depth === 0) {
-    return moves[Math.floor(Math.random() * moves.length)];
-  }
-
-  const { empty } = countDiscs(board);
-  // Nahe am Spielende: komplett ausrechnen (Brett füllt sich, Suche terminiert).
-  const depth = empty <= cfg.exact ? empty + 4 : cfg.depth;
-
-  // Erst mischen, dann stabil nach Gewicht sortieren: gleichwertige Züge
-  // stehen so in zufälliger Reihenfolge → Abwechslung, ohne dass Züge mit
-  // bloßen Alpha-Beta-Schrankenwerten fälschlich als gleich gut gelten.
-  for (let i = moves.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [moves[i], moves[j]] = [moves[j], moves[i]];
-  }
-  moves.sort((a, b) => WEIGHTS[b.idx] - WEIGHTS[a.idx]);
-
-  let bestVal = -Infinity;
-  let best = moves[0];
-  let alpha = -Infinity;
-  for (const m of moves) {
-    const next = applyMove(board, m.idx, m.flips, p);
-    const v = -search(next, opponent(p), depth - 1, -Infinity, -alpha);
-    if (v > bestVal) {
-      bestVal = v;
-      best = m;
-      if (v > alpha) alpha = v;
-    }
-  }
-  return best;
-}
-
-/* ============================================================
- * UI-Zustand und Ablaufsteuerung
- * ============================================================ */
+import {
+  EMPTY, BLACK, WHITE,
+  initialBoard, flipsFor, legalMoves, zugrechtNach,
+  applyMove, countDiscs, bestMove,
+} from "./engine.js";
 
 const state = {
   board: initialBoard(),
@@ -263,7 +23,7 @@ const state = {
   over: false,
   busy: false,        // KI denkt gerade / Demo läuft einen Zug
   demoPaused: false,
-  session: 0,         // entwertet laufende Timer nach Neustart/Menü
+  session: 0,         // entwertet laufende Timer und Worker-Antworten
   palette: "classic", // classic (Schwarz/Weiß) | redblue (Rot/Blau)
 };
 
@@ -354,10 +114,84 @@ function toast(msg, ms = 1800) {
   toastTimer = setTimeout(() => el.classList.remove("show"), ms);
 }
 
+/* ============================================================
+ * KI im Hintergrund-Thread
+ *
+ * Ein Worker wird beim ersten Bedarf erzeugt und danach wiederverwendet.
+ * Schlägt das fehl (kein Worker, keine Modul-Worker, Ladefehler), wird im
+ * Hauptthread gerechnet – langsamer in der Bedienung, aber spielbar.
+ * ============================================================ */
+
+let aiWorker = null;
+let workerDefekt = false;
+let workerRechnet = false;
+let offeneAnfrage = null;
+
+function getWorker() {
+  if (workerDefekt) return null;
+  if (aiWorker) return aiWorker;
+  try {
+    aiWorker = new Worker("ai-worker.js", { type: "module" });
+    aiWorker.onmessage = (e) => {
+      workerRechnet = false;
+      const anfrage = offeneAnfrage;
+      if (!anfrage || e.data.session !== anfrage.session) return;
+      zugUebernehmen(anfrage, e.data.move);
+    };
+    aiWorker.onerror = () => {
+      // Einmalig auf den Hauptthread zurückfallen und dort weiterrechnen.
+      workerDefekt = true;
+      workerRechnet = false;
+      try { aiWorker.terminate(); } catch (err) { /* egal */ }
+      aiWorker = null;
+      if (offeneAnfrage) rechneImHauptThread(offeneAnfrage);
+    };
+  } catch (e) {
+    workerDefekt = true;
+    aiWorker = null;
+  }
+  return aiWorker;
+}
+
+/**
+ * Partie ungültig machen: Der Zähler entwertet alle noch laufenden Timer und
+ * Worker-Antworten. Rechnet der Worker gerade eine tiefe Stellung, wird er
+ * beendet – sonst würde der nächste Zug hinter der alten Rechnung warten.
+ */
+function sessionEntwerten() {
+  state.session++;
+  offeneAnfrage = null;
+  if (aiWorker && workerRechnet) {
+    aiWorker.terminate();
+    aiWorker = null;
+    workerRechnet = false;
+  }
+}
+
+/** Ergebnis der Suche einspielen – frühestens nach der Mindestanzeigedauer. */
+function zugUebernehmen(anfrage, move) {
+  if (anfrage.session !== state.session) return;
+  offeneAnfrage = null;
+  const rest = anfrage.minDelay - (performance.now() - anfrage.t0);
+  setTimeout(() => {
+    if (anfrage.session !== state.session) return;
+    state.busy = false;
+    if (move) makeMove(move);
+  }, Math.max(0, rest));
+}
+
+/** Rückfall ohne Worker: setTimeout, damit "denkt" vor der Rechnung erscheint. */
+function rechneImHauptThread(anfrage) {
+  setTimeout(() => {
+    if (anfrage.session !== state.session) return;
+    zugUebernehmen(anfrage, bestMove(anfrage.board, anfrage.p, anfrage.level));
+  }, 30);
+}
+
 /* ---------- Spielablauf ---------- */
 
 function startGame() {
-  state.session++;
+  sessionEntwerten();
   state.board = initialBoard();
   state.current = BLACK;
   state.history = [];
@@ -390,14 +224,10 @@ function makeMove(move) {
 
 /** Nach einem Zug: Spielerwechsel, Passen und Spielende behandeln. */
 function advanceTurn(flipped) {
-  const next = opponent(state.current);
-  if (hasLegalMove(state.board, next)) {
-    state.current = next;
-  } else if (hasLegalMove(state.board, state.current)) {
-    toast(`${playerLabel(next)} muss passen`);
-  } else {
-    state.over = true;
-  }
+  const recht = zugrechtNach(state.board, state.current);
+  state.current = recht.current;
+  state.over = recht.over;
+  if (recht.passt) toast(`${playerLabel(recht.passt)} muss passen`);
 
   render(flipped);
   updateTurnIndicator();
@@ -428,21 +258,27 @@ function scheduleAI() {
   updateTurnIndicator(true);
   render();
 
-  const session = state.session;
-  const minDelay = state.mode === "demo" ? 650 : 350;
-  const t0 = performance.now();
+  // Mindestdauer, damit Computerzüge optisch nachvollziehbar bleiben. Sie
+  // blockiert nichts mehr – die Rechnung läuft daneben im Worker.
+  const anfrage = {
+    board: state.board,
+    p: state.current,
+    level: state.level,
+    session: state.session,
+    minDelay: state.mode === "demo" ? 650 : 350,
+    t0: performance.now(),
+  };
+  offeneAnfrage = anfrage;
 
-  // setTimeout, damit die UI vor der Rechenarbeit gezeichnet wird
-  setTimeout(() => {
-    if (session !== state.session) return;
-    const move = bestMove(state.board, state.current, state.level);
-    const elapsed = performance.now() - t0;
-    setTimeout(() => {
-      if (session !== state.session) return;
-      state.busy = false;
-      if (move) makeMove(move);
-    }, Math.max(0, minDelay - elapsed));
-  }, 30);
+  const worker = getWorker();
+  if (worker) {
+    workerRechnet = true;
+    worker.postMessage({
+      board: anfrage.board, p: anfrage.p, level: anfrage.level, session: anfrage.session,
+    });
+  } else {
+    rechneImHauptThread(anfrage);
+  }
 }
 
 function undo() {
@@ -547,13 +383,13 @@ function init() {
   $("btn-restart").addEventListener("click", startGame);
   $("btn-undo").addEventListener("click", undo);
   $("btn-to-menu").addEventListener("click", () => {
-    state.session++;
+    sessionEntwerten();
     $("gameover").classList.remove("visible");
     $("game").hidden = true;
     $("menu").classList.add("visible");
   });
   $("btn-menu").addEventListener("click", () => {
-    state.session++;
+    sessionEntwerten();
     state.busy = false;
     $("game").hidden = true;
     $("menu").classList.add("visible");

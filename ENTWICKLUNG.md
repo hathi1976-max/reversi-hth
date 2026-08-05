@@ -9,7 +9,10 @@ ohne Abhängigkeiten. Alle Dateien sind statisch auslieferbar.
 claude-reversi/
 ├── index.html            Oberfläche: Menü, Spielbrett, Spielende-Dialog, Toast
 ├── style.css             Layout, Themes/Paletten, Animationen (responsiv)
-├── app.js                Spielregeln, KI und UI-Steuerung (eine Datei, drei Abschnitte)
+├── engine.js             Spielregeln und KI – reine Logik, kein DOM (ES-Modul)
+├── ai-worker.js          Modul-Worker: rechnet die Zugsuche im Hintergrund
+├── app.js                Zustand, DOM und Zeitsteuerung
+├── tests/                Testlauf im Browser (test.html), ohne Build-Schritt
 ├── sw.js                 Service Worker (Offline-Cache der App-Shell)
 ├── manifest.webmanifest  PWA-Manifest (Android-Installation)
 ├── icons/                App-Icons 192/512 px (generiert, s. u.)
@@ -18,18 +21,20 @@ claude-reversi/
 └── ENTWICKLUNG.md        diese Datei
 ```
 
-## Architektur von `app.js`
+## Architektur
 
-Die Datei ist bewusst in drei unabhängige Schichten gegliedert:
+Drei Schichten, drei Dateien. `engine.js` kennt weder `window` noch `document`
+und wird von `app.js`, `ai-worker.js` und den Tests importiert.
 
-### 1. Spiellogik (pur, ohne DOM)
+### 1. Spiellogik (`engine.js`, pur, ohne DOM)
 
 - Brett = `Uint8Array(64)`; Werte: `0` leer, `1` Schwarz/Spieler 1, `2` Weiß/Spieler 2.
   Index = `zeile * 8 + spalte`.
 - `flipsFor(board, idx, p)` – Kernfunktion: liefert alle Steine, die ein Zug
   umdrehen würde (leeres Array = illegaler Zug). Läuft die 8 Richtungen ab.
-- `legalMoves`, `hasLegalMove`, `applyMove` (arbeitet auf einer Kopie),
-  `countDiscs`, `initialBoard`.
+- `legalMoves`, `countMoves`, `hasFlip`, `hasLegalMove`, `applyMove` (arbeitet
+  auf einer Kopie), `countDiscs`, `initialBoard`.
+- `zugrechtNach(board, current)` – Pass- und Ende-Regel als reine Funktion.
 - Alle Funktionen sind frei von Seiteneffekten → direkt testbar, auch von
   der KI wiederverwendet.
 
@@ -59,15 +64,15 @@ Korrektur in `bestMove`: Die Zugliste wird **vor** der Suche gemischt
 (Fisher-Yates) und dann stabil nach Feldgewicht sortiert; gewählt wird nur
 ein strikt bester Zug. Varianz bleibt erhalten, Korrektheit auch.
 
-### 3. UI-Steuerung
+### 3. UI-Steuerung (`app.js`)
 
 - Ein zentrales `state`-Objekt (Brett, Zugrecht, Modus, Stufe, Historie,
   Palette …). Das DOM wird in `render()` komplett aus dem Zustand abgeleitet.
 - `advanceTurn()` ist die einzige Stelle, die Spielerwechsel, Passen und
   Spielende entscheidet – danach ggf. `scheduleAI()`.
-- `scheduleAI()` rechnet in einem `setTimeout`, damit der Browser erst die
-  Anzeige („… denkt") zeichnet; eine Mindestverzögerung hält Computerzüge
-  optisch nachvollziehbar. `state.session` (Zähler) entwertet veraltete
+- `scheduleAI()` schickt Brett, Zugrecht und Stufe an `ai-worker.js` und wartet
+  auf die Antwort; eine Mindestverzögerung hält Computerzüge optisch
+  nachvollziehbar. `state.session` (Zähler) entwertet veraltete Antworten und
   Timer nach Neustart/Menüwechsel – wichtig gegen Geisterzüge.
 - „Zug zurück" spult über Snapshots (`state.history`) zurück; gegen den
   Computer bis zum letzten menschlichen Zug.
@@ -112,12 +117,17 @@ ausgeben.
 py -m http.server 8173
 ```
 
-im Projektordner starten, dann `http://localhost:8173` öffnen.
+im Projektordner starten, dann `http://localhost:8173` öffnen. Testlauf:
+`http://localhost:8173/tests/test.html`.
 
 Da die Spiellogik DOM-frei ist, lassen sich KI-Partien direkt in der
-Browser-Konsole simulieren, z. B. Stufe 3 gegen Stufe 2:
+Browser-Konsole simulieren – seit dem Umbau auf Module über einen
+dynamischen Import, z. B. Stufe 3 gegen Stufe 2:
 
 ```js
+const { initialBoard, bestMove, applyMove, countDiscs, opponent, BLACK } =
+  await import('./engine.js');
+
 function playGame(lb, lw) {
   let b = initialBoard(), p = BLACK, passes = 0;
   while (passes < 2) {
@@ -157,10 +167,69 @@ Stufenpaarungen, 682 Züge) Zug für Zug identisch zum Stand davor.
 Allokation zurück; das war nur ein Viertel der Ersparnis (1356 → 1017 ms).
 Der Hauptposten war die Richtungsschleife mit Randprüfung.
 
+### 05.08.2026 — A1/C2: Suche im Worker, Logik in `engine.js`, `CONFIG`
+
+**Geändert.** `app.js` war eine Datei mit drei Schichten; die unteren beiden
+liegen jetzt in `engine.js` (Regeln + KI, ES-Modul, kein DOM). `ai-worker.js`
+importiert daraus `bestMove` und beantwortet Nachrichten der Form
+`{board, p, level, session}`. `app.js` behält Zustand, DOM und Zeitsteuerung
+und wird als `type="module"` geladen.
+
+- **Warum zwei Dateien statt einer `ai.js`:** Die Logik brauchen drei Seiten
+  (Oberfläche, Worker, Tests). Ein klassisches Worker-Skript ist nicht
+  importierbar, ein Modul-Worker schon.
+- **Rückfall:** Lässt sich kein Modul-Worker erzeugen oder scheitert das Laden,
+  setzt `app.js` `workerDefekt` und rechnet wie bisher im Hauptthread. Die App
+  bleibt in jedem Browser spielbar.
+- **Abbruch:** `sessionEntwerten()` erhöht `state.session` **und** beendet einen
+  gerade rechnenden Worker. Ohne das würde der nächste Zug nach „Neustart"
+  hinter einer laufenden Experten-Rechnung warten.
+- **Mindestdauer bleibt.** Sie hält Computerzüge lesbar (Demo!) und blockiert
+  jetzt nichts mehr, weil die Rechnung daneben läuft.
+- **`zugrechtNach(board, current)`** ist neu in `engine.js`: Pass- und
+  Ende-Regel als reine Funktion. `advanceTurn` ruft sie nur noch auf.
+- **`CONFIG`** bündelt alle Zahlen der KI (C2). `CORNERS` entfällt, die
+  Eckfelder werden aus den Gewichten abgeleitet.
+- `sw.js`: `CACHE` auf `reversi-v3`, `engine.js` und `ai-worker.js` in `ASSETS`.
+
+**Geprüft.** Vergleichsstand vor dem Umbau gegen den neuen, mit gesätem
+Zufallsgenerator: 120 Stellungen × Stufen 2/3/4 = **360 Vergleiche, 0
+Abweichungen**; 11 Partien über alle Stufenpaarungen, **658 Züge Zug für Zug
+identisch**. Laufzeit unverändert (Stufe 4 über alle Stellungen 5221 → 4905 ms,
+Messstreuung). Zusätzlich Ladeprobe der Seite: 64 Zellen im DOM, keine
+Konsolenfehler.
+
+### 05.08.2026 — C1: Tests im Browser, ohne node
+
+**Geändert.** Neu `tests/` mit eigenem Läufer (`lauf.js`, Aufbau aus
+`claude-wegpunkte` übernommen) und drei Testdateien:
+
+| Datei              | Umfang | Inhalt                                              |
+| ------------------ | -----: | --------------------------------------------------- |
+| `regeln.test.js`   |     42 | Startstellung, `flipsFor` in acht Richtungen, Zeilengrenze, `applyMove`, Pass-/Ende-Regel |
+| `ki.test.js`       |     19 | `CONFIG`, `evaluate`, `finalScore`, `search`, `bestMove`, ganze Partie |
+| `worker.test.js`   |      3 | Der Modul-Worker lädt, antwortet und reicht die Sitzungsnummer zurück |
+
+**Aufruf.** `py -m http.server 8173` im Projektordner, dann
+`http://localhost:8173/tests/test.html`. Die Seite meldet oben
+„alle 64 Tests bestanden" oder listet die Fehlschläge.
+
+**Stolperstein Service Worker.** `test.html` meldet einen registrierten Service
+Worker vor den Modul-Importen ab und leert die Caches, sonst testet man den
+alten Stand. Derselbe Grund, aus dem `CACHE` in `sw.js` bei jeder Änderung
+hochgezählt werden muss.
+
+**Automatisierung.** Kommandozeilen-Browser beenden sich beim `load`-Ereignis –
+also mitten in den asynchronen Worker-Tests. Deshalb schickt
+`tests/test.html?melde=<pfad>` das Ergebnis zusätzlich per POST an diesen Pfad;
+ein Server, der darauf hört, kann den Lauf ohne Fenster auswerten. Ohne den
+Parameter ändert sich nichts.
+
+**Geprüft.** 64/64 grün.
+
 ## Ideen für später
 
 - Online-Mehrspieler (braucht einen kleinen Server, z. B. WebSocket-Relay)
 - Soundeffekte und Vibration (`navigator.vibrate`) beim Zug
 - Zughistorie/Notation (a1–h8) und Partie-Export
-- Web Worker für die KI, falls höhere Suchtiefen gewünscht sind
 - Eröffnungsbuch für den Experten

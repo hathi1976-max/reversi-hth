@@ -1,10 +1,12 @@
 /* Service Worker: App-Shell cachen, damit Reversi offline läuft. */
-const CACHE = "reversi-v2";
+const CACHE = "reversi-v3";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./app.js",
+  "./engine.js",
+  "./ai-worker.js",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
