@@ -136,6 +136,27 @@ Damit wurde u. a. verifiziert: vollständige Partien auf allen Stufen
 (60 Züge, 64 Steine), Stufenleiter (2 schlägt 1 mit 8/8, 3 schlägt 2 mit
 5/6, 4 schlägt 2 mit 3/4) und die Zugzeiten.
 
+## Umsetzung des Code-Reviews (August 2026)
+
+Grundlage: `CODEREVIEW.md`. Ein Abschnitt je Arbeitsschritt, in der dort
+empfohlenen Reihenfolge.
+
+### 04.08.2026 — B1: `flipsFor`/`hasFlip` über vorberechnete Strahlen
+
+**Geändert.** `RAYS[feld][richtung]` (vorberechnete Feldindizes bis zum Rand)
+ersetzt die Zeilen-/Spaltenrechnung samt Randprüfung im innersten Kern.
+Neu: `hasFlip` (Ja/Nein, bricht beim ersten Treffer ab, ohne Allokation) und
+`countMoves`; `evaluate` und `hasLegalMove` nutzen sie statt `legalMoves(...).length`.
+
+**Geprüft.** `bestMove` Stufe 4 über fünf feste Stellungen: 1356 ms → 356 ms
+(3,8×). `evaluate` 18,0 → 5,1 µs/Aufruf. Demo-Partie Experte gegen Experte
+15,4 s → 6,2 s. Verhaltensgleichheit über 11 gesäte Partien (alle
+Stufenpaarungen, 682 Züge) Zug für Zug identisch zum Stand davor.
+
+**Nebenbefund.** Der Review führte die Kosten allein auf die Zuglisten-
+Allokation zurück; das war nur ein Viertel der Ersparnis (1356 → 1017 ms).
+Der Hauptposten war die Richtungsschleife mit Randprüfung.
+
 ## Ideen für später
 
 - Online-Mehrspieler (braucht einen kleinen Server, z. B. WebSocket-Relay)

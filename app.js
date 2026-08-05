@@ -12,6 +12,28 @@ const DIRS = [
   [1, -1],  [1, 0],  [1, 1],
 ];
 
+/**
+ * Vorberechnete Strahlen: RAYS[feld][richtung] = Feldindizes vom Feld aus bis
+ * zum Brettrand. Damit entfallen im heißesten Schleifenkern die Zeilen-/
+ * Spaltenrechnung und die Randprüfung – der Zeilenüberlauf ist schon dadurch
+ * ausgeschlossen, dass jeder Strahl am Rand endet.
+ */
+const RAYS = (() => {
+  const all = [];
+  for (let i = 0; i < 64; i++) {
+    const r0 = i >> 3, c0 = i & 7;
+    const perField = [];
+    for (const [dr, dc] of DIRS) {
+      const line = [];
+      let r = r0 + dr, c = c0 + dc;
+      while (r >= 0 && r < 8 && c >= 0 && c < 8) { line.push(r * 8 + c); r += dr; c += dc; }
+      perField.push(Uint8Array.from(line));
+    }
+    all.push(perField);
+  }
+  return all;
+})();
+
 function initialBoard() {
   const b = new Uint8Array(64);
   b[27] = WHITE; b[28] = BLACK;
@@ -25,20 +47,39 @@ function opponent(p) { return 3 - p; }
 function flipsFor(board, idx, p) {
   if (board[idx] !== EMPTY) return [];
   const opp = opponent(p);
-  const r0 = idx >> 3, c0 = idx & 7;
+  const rays = RAYS[idx];
   const flips = [];
-  for (const [dr, dc] of DIRS) {
-    let r = r0 + dr, c = c0 + dc;
-    const line = [];
-    while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r * 8 + c] === opp) {
-      line.push(r * 8 + c);
-      r += dr; c += dc;
-    }
-    if (line.length && r >= 0 && r < 8 && c >= 0 && c < 8 && board[r * 8 + c] === p) {
-      flips.push(...line);
+  for (let d = 0; d < 8; d++) {
+    const ray = rays[d];
+    const len = ray.length;
+    let k = 0;
+    while (k < len && board[ray[k]] === opp) k++;
+    // Nur eingeschlossene Ketten zählen: mindestens ein gegnerischer Stein und
+    // dahinter ein eigener (k < len schließt den Brettrand aus).
+    if (k > 0 && k < len && board[ray[k]] === p) {
+      for (let j = 0; j < k; j++) flips.push(ray[j]);
     }
   }
   return flips;
+}
+
+/**
+ * Wie `flipsFor`, aber nur die Ja/Nein-Frage: bricht beim ersten Treffer ab und
+ * legt kein Array an. Mobilitätsbewertung und Passprüfung brauchen ausschließlich
+ * diese Antwort und laufen in der Suche hunderttausendfach.
+ */
+function hasFlip(board, idx, p) {
+  if (board[idx] !== EMPTY) return false;
+  const opp = opponent(p);
+  const rays = RAYS[idx];
+  for (let d = 0; d < 8; d++) {
+    const ray = rays[d];
+    const len = ray.length;
+    let k = 0;
+    while (k < len && board[ray[k]] === opp) k++;
+    if (k > 0 && k < len && board[ray[k]] === p) return true;
+  }
+  return false;
 }
 
 /** Alle legalen Züge als Liste von { idx, flips }. */
@@ -52,9 +93,16 @@ function legalMoves(board, p) {
   return moves;
 }
 
+/** Anzahl legaler Züge – gleiches Ergebnis wie `legalMoves(...).length`, ohne Allokation. */
+function countMoves(board, p) {
+  let n = 0;
+  for (let i = 0; i < 64; i++) if (hasFlip(board, i, p)) n++;
+  return n;
+}
+
 function hasLegalMove(board, p) {
   for (let i = 0; i < 64; i++) {
-    if (board[i] === EMPTY && flipsFor(board, i, p).length) return true;
+    if (hasFlip(board, i, p)) return true;
   }
   return false;
 }
@@ -115,8 +163,8 @@ function evaluate(board, p) {
     else if (board[c] === opp) cornerScore -= 100;
   }
 
-  const myMob = legalMoves(board, p).length;
-  const oppMob = legalMoves(board, opp).length;
+  const myMob = countMoves(board, p);
+  const oppMob = countMoves(board, opp);
   const mobility = 9 * (myMob - oppMob);
 
   return pos + cornerScore + mobility;
