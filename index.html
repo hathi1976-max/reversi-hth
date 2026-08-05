@@ -2,7 +2,9 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- Kein user-scalable=no: Zoomen zu unterbinden ist eine Barriere. Gegen
+       versehentlichen Doppeltipp-Zoom hilft touch-action im Stylesheet. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#1a2f23">
   <meta name="description" content="Reversi (Othello) – gegen den Computer, zu zweit oder als Demo.">
   <title>Reversi</title>
@@ -76,8 +78,15 @@
     </header>
 
     <div id="board-wrap">
-      <div id="board" aria-label="Spielbrett"></div>
+      <!-- Bedienung mit der Tastatur: Pfeiltasten bewegen, Leertaste oder
+           Enter setzt. Die Zeilen (role="row") sind per CSS display:contents
+           unsichtbar für das Layout, aber vorhanden für Screenreader. -->
+      <div id="board" role="grid" aria-label="Spielbrett, 8 mal 8 Felder"
+           aria-rowcount="8" aria-colcount="8"></div>
     </div>
+
+    <!-- Spielstand für Screenreader, wird nach jedem Zug neu geschrieben. -->
+    <div id="ansage" class="sr-only" role="status" aria-live="polite"></div>
 
     <footer class="controls">
       <button id="btn-menu">Menü</button>

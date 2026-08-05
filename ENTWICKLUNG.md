@@ -99,9 +99,11 @@ und `colorName()` erweitern.
 
 - `manifest.webmanifest`: Standalone-Anzeige, Portrait, Icons 192/512
   (inkl. `maskable`).
-- `sw.js`: Cache-first für die App-Shell. **Bei jeder Änderung an
-  ausgelieferten Dateien die `CACHE`-Konstante hochzählen** (`reversi-v2`,
-  `-v3` …), sonst sehen installierte Apps die alte Version.
+- `sw.js`: **Network-first** für die eigenen Dateien, der Cache ist
+  Offline-Rückfall. Nachgecacht wird nur, was in `SHELL` steht.
+  **Bei jeder Änderung an ausgelieferten Dateien die `CACHE`-Konstante
+  hochzählen** (`reversi-v3`, `-v4` …), sonst sehen installierte Apps die alte
+  Version.
 - Installation setzt HTTPS voraus (localhost ist ausgenommen).
 
 ## Icons
@@ -226,6 +228,36 @@ ein Server, der darauf hört, kann den Lauf ohne Fenster auswerten. Ohne den
 Parameter ändert sich nichts.
 
 **Geprüft.** 64/64 grün.
+
+### 05.08.2026 — A2/C3: Tastatur, Screenreader, Service Worker
+
+**Geändert (A2).**
+
+- `#board` ist `role="grid"`, darunter acht `role="row"` (per
+  `display: contents` unsichtbar fürs Layout), darin `role="gridcell"`.
+- Jedes Feld trägt eine Beschriftung wie „D4, leer", „C3, Schwarz, möglicher
+  Zug", „E6, Rot, letzter Zug" — `render()` schreibt sie mit, sie folgt also
+  auch der Farbpalette.
+- Tastatur: Pfeiltasten bewegen, Pos1/Ende an den Zeilenrand, Enter oder
+  Leertaste setzt. Roving Tabindex — genau ein Feld ist über Tab erreichbar,
+  ein Klick zieht den Fokus mit. Sichtbarer Fokusrahmen über `:focus-visible`.
+- Neue versteckte Live-Region `#ansage`: nach jedem Zug „Schwarz 12, Weiß 8.
+  Weiß am Zug." Auch nach „Zug zurück" und am Spielende.
+- `user-scalable=no` ist raus (Zoomsperre ist eine Barriere), dafür
+  `touch-action: manipulation` gegen die Doppeltipp-Verzögerung.
+
+**Geändert (C3).** `sw.js` ist network-first; der Cache dient nur noch als
+Offline-Rückfall. `skipWaiting()`/`clients.claim()` hängen jetzt in den
+`waitUntil`-Ketten statt daneben. Nachgecacht wird ausschließlich, was in
+`SHELL` steht — sonst landet der Testlauf unter `tests/` im App-Cache.
+`CACHE` auf `reversi-v4`.
+
+**Geprüft.** Testlauf 64/64 grün. Ladeprobe der Seite: 64 `role="gridcell"`,
+8 `role="row"`, Live-Region vorhanden, keine Konsolenfehler.
+
+**Von Hand nachzuprüfen** (geht nur im echten Browser): Tab bis ins Brett,
+mit den Pfeiltasten wandern, mit Leertaste setzen; Zoomen mit zwei Fingern auf
+dem Handy; und nach einem Neuladen, dass der neue Service Worker greift.
 
 ## Ideen für später
 

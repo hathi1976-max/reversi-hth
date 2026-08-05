@@ -84,7 +84,32 @@ nicht.
 4. Nebeneffekt: Die Denkzeit lässt sich dann ehrlich anzeigen, statt sie mit
    `minDelay` (`:384`) künstlich zu glätten.
 
-### A2. Das Brett ist mit der Tastatur nicht bedienbar
+### A2. Das Brett ist mit der Tastatur nicht bedienbar — ✅ erledigt 05.08.2026
+
+> **Behoben.** Alle vier Punkte umgesetzt:
+> 1. `#board` ist `role="grid"` mit `aria-rowcount`/`aria-colcount`, die Felder
+>    sind `role="gridcell"` mit Beschriftung „D4, leer" / „C3, Schwarz,
+>    möglicher Zug" / „… letzter Zug". Die Beschriftung wird in `render()`
+>    mitgeschrieben und folgt der Palette (Rot/Blau statt Schwarz/Weiß).
+> 2. Pfeiltasten bewegen, Pos1/Ende springen an den Zeilenrand, Enter und
+>    Leertaste setzen den Stein — ein `keydown`-Listener am Container.
+>    Roving Tabindex: genau ein Feld ist über Tab erreichbar. Ein Klick zieht
+>    den Fokus mit, sonst springt die nächste Pfeiltaste an eine alte Stelle.
+> 3. Neue Live-Region `#ansage` (`role="status"`, `aria-live="polite"`,
+>    visuell versteckt über `.sr-only`) meldet nach jedem Zug
+>    „Schwarz 12, Weiß 8. Weiß am Zug." — auch nach „Zug zurück" und am Ende.
+> 4. `user-scalable=no` ist aus `index.html` verschwunden;
+>    `touch-action: manipulation` auf Feldern und Schaltflächen nimmt dafür die
+>    Doppeltipp-Verzögerung.
+>
+> **Ergänzung zum Vorschlag:** Zwischen `#board` und den Feldern liegen jetzt
+> acht `role="row"`-Elemente — ein Raster ohne Zeilen ist ARIA-widrig, und
+> Screenreader zählen sonst keine Zeilen. Damit das CSS-Raster unberührt bleibt,
+> tragen sie `display: contents`.
+>
+> **Gegenprobe:** Ladeprobe im Browser — 64 `role="gridcell"`, 8 `role="row"`,
+> Live-Region vorhanden, keine Konsolenfehler. Die Tastaturbedienung selbst
+> muss von Hand geprüft werden (siehe `ENTWICKLUNG.md`).
 
 **Wo:** `buildBoard` (`:232-244`) erzeugt `<div class="cell">` mit Klick-Listener;
 `index.html:79` hat nur ein `aria-label` am Container.
@@ -274,7 +299,21 @@ einer eigenen Datei.
 kommentieren, welche Zahl wofür gilt. Kein Verhaltenswechsel, erspart aber beim
 nächsten Feintuning die Suche nach der zweiten Stelle.
 
-### C3. Service Worker ist cache-first ohne Netzabgleich
+### C3. Service Worker ist cache-first ohne Netzabgleich — ✅ erledigt 05.08.2026
+
+> **Behoben.** `sw.js` ist auf **network-first** umgestellt (Vorlage
+> `claude-geo/sw.js`): Die eigenen Dateien kommen aus dem Netz, der Cache ist
+> Offline-Rückfall. `skipWaiting()` und `clients.claim()` hängen jetzt **in**
+> den `waitUntil`-Ketten, nicht mehr daneben. `CACHE` steht auf `reversi-v4`.
+>
+> **Strenger als die Vorlage:** Nachgecacht wird nur, was in `SHELL` steht
+> (`SHELL_URLS`-Abgleich). Sonst landet der Testlauf unter `tests/` im
+> App-Cache und wird offline als App-Datei ausgeliefert. Fremde Herkünfte und
+> alles außer `GET` fasst der Worker gar nicht an.
+>
+> **Zusätzlich gegen dieselbe Falle:** `tests/test.html` meldet einen
+> registrierten Service Worker ab und leert die Caches, bevor die Module
+> geladen werden — sonst testet man den alten Stand.
 
 **Wo:** `sw.js:27-31`
 

@@ -25,7 +25,13 @@ const state = {
   demoPaused: false,
   session: 0,         // entwertet laufende Timer und Worker-Antworten
   palette: "classic", // classic (Schwarz/Weiß) | redblue (Rot/Blau)
+  focus: 27,          // Feld unter dem Tastaturfokus (Roving Tabindex)
 };
+
+/** Feldname in Schachnotation: 0 -> A1, 63 -> H8. */
+function feldName(i) {
+  return `${"ABCDEFGH"[i & 7]}${(i >> 3) + 1}`;
+}
 
 /** Anzeigename der Spielerfarbe gemäß aktiver Palette. */
 function colorName(c) {
@@ -38,17 +44,63 @@ const boardEl = $("board");
 const cells = [];
 
 function buildBoard() {
-  for (let i = 0; i < 64; i++) {
-    const cell = document.createElement("div");
-    cell.className = "cell";
-    cell.dataset.idx = i;
-    const disc = document.createElement("div");
-    disc.className = "disc";
-    cell.appendChild(disc);
-    cell.addEventListener("click", () => onCellClick(i));
-    boardEl.appendChild(cell);
-    cells.push(cell);
+  for (let r = 0; r < 8; r++) {
+    // Die Zeile ist reine ARIA-Struktur; display:contents hält sie aus dem
+    // Layout heraus, sodass die Felder Rasterelemente von #board bleiben.
+    const row = document.createElement("div");
+    row.className = "board-row";
+    row.setAttribute("role", "row");
+
+    for (let c = 0; c < 8; c++) {
+      const i = r * 8 + c;
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.idx = i;
+      cell.setAttribute("role", "gridcell");
+      cell.tabIndex = -1;
+      const disc = document.createElement("div");
+      disc.className = "disc";
+      cell.appendChild(disc);
+      cell.addEventListener("click", () => onCellClick(i));
+      row.appendChild(cell);
+      cells.push(cell);
+    }
+    boardEl.appendChild(row);
   }
+
+  boardEl.addEventListener("keydown", onBoardKey);
+}
+
+/** Fokus auf ein Feld setzen; nur dieses Feld ist über Tab erreichbar. */
+function fokussiere(idx, auchDomFokus = true) {
+  state.focus = idx;
+  for (let i = 0; i < 64; i++) cells[i].tabIndex = i === idx ? 0 : -1;
+  if (auchDomFokus) cells[idx].focus();
+}
+
+/** Pfeiltasten bewegen, Pos1/Ende springen an den Zeilenrand, Enter/Leer setzt. */
+function onBoardKey(e) {
+  const r = state.focus >> 3, c = state.focus & 7;
+  let ziel = null;
+
+  switch (e.key) {
+    case "ArrowUp":    if (r > 0) ziel = state.focus - 8; break;
+    case "ArrowDown":  if (r < 7) ziel = state.focus + 8; break;
+    case "ArrowLeft":  if (c > 0) ziel = state.focus - 1; break;
+    case "ArrowRight": if (c < 7) ziel = state.focus + 1; break;
+    case "Home":       ziel = r * 8; break;
+    case "End":        ziel = r * 8 + 7; break;
+    case "Enter":
+    case " ":
+      e.preventDefault();
+      onCellClick(state.focus);
+      return;
+    default:
+      return;
+  }
+
+  e.preventDefault();
+  if (ziel !== null) fokussiere(ziel);
 }
 
 function isHumanTurn() {
@@ -79,6 +131,12 @@ function render(flipped = []) {
     }
     cell.classList.toggle("legal", legal.has(i));
     cell.classList.toggle("last-move", i === state.lastMove);
+
+    // Beschriftung für Screenreader: Feld, Inhalt, ggf. Zughinweis.
+    let text = `${feldName(i)}, ${v === EMPTY ? "leer" : colorName(v)}`;
+    if (legal.has(i)) text += ", möglicher Zug";
+    if (i === state.lastMove) text += ", letzter Zug";
+    cell.setAttribute("aria-label", text);
   }
 
   const { black, white } = countDiscs(state.board);
@@ -88,6 +146,16 @@ function render(flipped = []) {
   $("chip-white").classList.toggle("active", !state.over && state.current === WHITE);
 
   $("btn-undo").disabled = state.mode === "demo" || state.history.length === 0 || state.busy;
+}
+
+/** Spielstand in die Live-Region schreiben – für Screenreader die einzige
+    Rückmeldung darauf, dass sich etwas getan hat. */
+function ansage() {
+  const { black, white } = countDiscs(state.board);
+  const stand = `${colorName(BLACK)} ${black}, ${colorName(WHITE)} ${white}`;
+  $("ansage").textContent = state.over
+    ? `${stand}. Spiel beendet.`
+    : `${stand}. ${colorName(state.current)} am Zug.`;
 }
 
 function playerLabel(color) {
@@ -210,8 +278,14 @@ function startGame() {
   $("gameover").classList.remove("visible");
   $("game").hidden = false;
 
+  // Tastaturfokus auf einen spielbaren Zug legen, damit die erste Pfeiltaste
+  // nicht irgendwo im leeren Brett startet.
+  const erster = legalMoves(state.board, state.current)[0];
+  fokussiere(erster ? erster.idx : 27, false);
+
   render();
   updateTurnIndicator();
+  ansage();
   scheduleAI();
 }
 
@@ -231,6 +305,7 @@ function advanceTurn(flipped) {
 
   render(flipped);
   updateTurnIndicator();
+  ansage();
 
   if (state.over) {
     setTimeout(showGameOver, 700);
@@ -240,6 +315,9 @@ function advanceTurn(flipped) {
 }
 
 function onCellClick(idx) {
+  // Auch ein abgelehnter Zug verschiebt den Tastaturfokus – sonst springt er
+  // beim nächsten Pfeiltastendruck an eine unerwartete Stelle zurück.
+  fokussiere(idx, false);
   if (!isHumanTurn()) return;
   const flips = flipsFor(state.board, idx, state.current);
   if (!flips.length) return;
@@ -306,6 +384,7 @@ function undo() {
   $("gameover").classList.remove("visible");
   render();
   updateTurnIndicator();
+  ansage();
 }
 
 function showGameOver() {
