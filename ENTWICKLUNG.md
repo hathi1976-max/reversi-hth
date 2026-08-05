@@ -320,6 +320,28 @@ gegen ein schlichtes Negamax ohne Alpha-Beta und ohne Tabelle.
 Tiefe mehr wäre also bezahlbar. Das ist aber eine Entscheidung über die
 Spielstärke und keine Aufräumarbeit — die Zieltiefen bleiben unverändert.
 
+### 05.08.2026 — D: Kleinigkeiten
+
+- **Meldungen** (`toast`) laufen über eine Warteschlange nacheinander durch
+  statt sich zu überschreiben. Müssen beide Seiten kurz hintereinander passen,
+  ging bisher eine Meldung verloren. `sessionEntwerten()` verwirft wartende
+  Meldungen, damit nach einem Neustart nichts aus der alten Partie nachkommt.
+- **Dokumente entzerrt.** Die Zuständigkeiten stehen jetzt im `README.md`:
+  README = Kurzüberblick und Installation, `SPIELEIGENSCHAFTEN.md` =
+  Nutzersicht, `ENTWICKLUNG.md` = Technik. Der befürchtete Fall war schon
+  eingetreten — `SPIELEIGENSCHAFTEN.md` kannte die Tastaturbedienung nicht.
+  Nachgetragen samt Tastentabelle.
+- **Nicht geändert:** `void disc.offsetWidth` in `render()` bleibt. Die
+  vorgeschlagene Alternative `getAnimations().forEach(a => a.cancel())` liest
+  sich besser, stößt die Animation aber nicht zuverlässig neu an: Die Klasse
+  `flip` wird im selben Ablauf entfernt und wieder gesetzt, ohne erzwungenen
+  Stilabgleich sieht der Browser keine Änderung. Der Kommentar im Code nennt
+  den Grund jetzt.
+- Skalentabelle für `evaluate` und der Rückfall bei unbekannter Stufe waren
+  Teil von C2 bzw. A1 und sind dort erledigt.
+
+`sw.js`: `CACHE` auf `reversi-v6`.
+
 ## Ideen für später
 
 - Online-Mehrspieler (braucht einen kleinen Server, z. B. WebSocket-Relay)

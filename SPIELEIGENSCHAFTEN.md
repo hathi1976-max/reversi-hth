@@ -62,6 +62,21 @@ auch nach einem Neustart der App:
   hervorgehoben
 - Flip-Animation beim Umdrehen der Steine
 
+### Bedienung mit der Tastatur
+
+Das Brett lässt sich vollständig ohne Maus und ohne Touch bedienen:
+
+| Taste | Wirkung |
+| --- | --- |
+| **Tabulator** | springt in das Brett hinein |
+| **Pfeiltasten** | bewegen die Auswahl Feld für Feld |
+| **Pos 1 / Ende** | springen an den linken bzw. rechten Rand der Zeile |
+| **Leertaste / Eingabe** | setzt den Stein auf das ausgewählte Feld |
+
+Für Screenreader ist jedes Feld benannt („D4, leer" / „C3, Schwarz, möglicher
+Zug"), und nach jedem Zug wird der Stand angesagt („Schwarz 12, Weiß 8. Weiß am
+Zug."). Die Anzeige lässt sich frei zoomen.
+
 ## Plattform
 
 - **Web-App:** läuft in jedem modernen Browser (Desktop und Mobil)

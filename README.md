@@ -19,8 +19,13 @@ kein Build-Schritt – nur statische Dateien.
 - Zughilfen (grüne Punkte), letzter Zug markiert, „Zug zurück", Passen-Hinweis
 - Offline-fähig dank Service Worker
 
-Details: [SPIELEIGENSCHAFTEN.md](SPIELEIGENSCHAFTEN.md) (Nutzersicht) und
-[ENTWICKLUNG.md](ENTWICKLUNG.md) (Technik).
+- Vollständig mit der **Tastatur** bedienbar, Feldansagen für Screenreader
+
+Drei Dokumente, drei Zuständigkeiten — wer etwas ändert, pflegt genau eines:
+diese Datei bleibt der Kurzüberblick mit Installationsanleitung,
+[SPIELEIGENSCHAFTEN.md](SPIELEIGENSCHAFTEN.md) beschreibt das Spiel aus
+Nutzersicht (Regeln, Modi, Stufen, Bedienung),
+[ENTWICKLUNG.md](ENTWICKLUNG.md) den Aufbau und die Entwicklungsschritte.
 
 ## Lokal starten
 

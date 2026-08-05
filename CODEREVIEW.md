@@ -426,36 +426,79 @@ bereits macht.
 
 ---
 
-## D. Kleinigkeiten
+## D. Kleinigkeiten — ✅ erledigt 05.08.2026
+
+> **Behoben.** Fünf von sechs Punkten umgesetzt, einer bewusst nicht — im
+> Einzelnen unten.
 
 - `render` (`:267-270`): `void disc.offsetWidth;` erzwingt einen Reflow, um die
   Flip-Animation neu anzustoßen — funktioniert, ist aber ein Trick. Kommentar ist
   vorhanden, gut. Alternative wäre `disc.getAnimations().forEach(a => a.cancel())`.
-- `evaluate` (`:98-123`) mischt drei Einheiten (Positionsgewichte, Steindifferenz
-  ×60, Mobilität ×9) ohne dokumentierte Skala. Ein Satz im Kommentar, in welcher
-  Größenordnung die Terme liegen sollen, hilft beim Nachjustieren.
-- `bestMove` (`:170`): `LEVELS[level]` ohne Fallback. `level` kommt aus
-  `dataset.level` (`:482`), ist also kontrolliert — trotzdem
-  `const cfg = LEVELS[level] || LEVELS[2];` als Absicherung.
-- `applyPalette` (`:469`) fängt localStorage-Fehler korrekt ab (privater Modus) —
-  vorbildlich, so lassen.
-- `toast` (`:301-307`): Bei schnell aufeinanderfolgenden Meldungen überschreibt
-  jede die vorige. Bei "muss passen" in beiden Richtungen kurz hintereinander
-  geht eine verloren. Niedrige Priorität.
-- `SPIELEIGENSCHAFTEN.md` und `ENTWICKLUNG.md` liegen parallel zum `README.md`.
-  Prüfen, ob sich Inhalte überschneiden — bei drei Dokumenten für 525 Zeilen Code
-  veraltet erfahrungsgemäß eines still.
+
+  > **Nicht umgesetzt, mit Absicht.** `getAnimations().cancel()` ist zwar
+  > sauberer zu lesen, stößt die Animation aber nicht zuverlässig neu an: Die
+  > Klasse `flip` wird im selben Ablauf entfernt und wieder gesetzt, der Browser
+  > berechnet den Stil erst am Ende — ohne erzwungenen Stilabgleich sieht er gar
+  > keine Änderung. Der Reflow ist genau dieser Abgleich und deshalb die
+  > verlässlichere Zeile. Da die Wirkung sich nur im Browser beurteilen lässt und
+  > hier keiner zur Verfügung stand, bleibt die funktionierende Fassung stehen.
+  > Der Kommentar im Code benennt den Grund jetzt.
+
+- `evaluate`: Skala der drei Terme dokumentieren.
+  > **Erledigt** als Teil von C2: Über `CONFIG` in `engine.js` steht eine
+  > Tabelle der Größenordnungen (Feldgewichte ±150, Ecken ±400, Mobilität ±90,
+  > Endspiel ±3.800, `finalScore` ×100.000).
+
+- `bestMove`: `LEVELS[level]` ohne Fallback.
+  > **Erledigt.** `CONFIG.stufen[level] || CONFIG.stufen[CONFIG.standardStufe]`.
+  > `tests/ki.test.js` ruft `bestMove(b, p, 99)` auf und erwartet einen legalen
+  > Zug statt einer Ausnahme.
+
+- `applyPalette` fängt localStorage-Fehler korrekt ab — vorbildlich, so lassen.
+  > **Unverändert gelassen**, wie empfohlen.
+
+- `toast`: Bei schnell aufeinanderfolgenden Meldungen überschreibt jede die vorige.
+  > **Erledigt.** Meldungen laufen jetzt über eine Warteschlange nacheinander
+  > durch (je 1,8 s, dazwischen 300 ms für das Ausblenden). `sessionEntwerten()`
+  > verwirft wartende Meldungen — nach einem Neustart gehören sie zur alten
+  > Partie.
+
+- Drei Dokumente für 525 Zeilen Code — eines veraltet erfahrungsgemäß still.
+  > **Erledigt.** Die Zuständigkeiten stehen jetzt ausdrücklich im `README.md`:
+  > README = Kurzüberblick und Installation, `SPIELEIGENSCHAFTEN.md` =
+  > Nutzersicht, `ENTWICKLUNG.md` = Technik und Entwicklungsschritte. Beim
+  > Nachsehen war genau der befürchtete Fall schon eingetreten:
+  > `SPIELEIGENSCHAFTEN.md` kannte die Tastaturbedienung nicht — nachgetragen,
+  > samt Tastentabelle und Screenreader-Verhalten.
 
 ---
 
 ## Reihenfolge der Umsetzung
 
 1. **B1** (`countMoves`/`hasFlip`) — kleinster Eingriff, größte Wirkung, und
-   Voraussetzung dafür, dass A1 sich lohnt
-2. **A1** (Web Worker) + `sw.js`-Anpassung
-3. **C1** (Tests) — nach A1 liegt die Logik ohnehin isoliert
-4. **A2** (Tastatur/Screenreader) + `user-scalable` entfernen
-5. **C3** (Service-Worker-Disziplin)
+   Voraussetzung dafür, dass A1 sich lohnt ✅ 04.08.2026
+2. **A1** (Web Worker) + `sw.js`-Anpassung ✅ 05.08.2026
+3. **C1** (Tests) — nach A1 liegt die Logik ohnehin isoliert ✅ 05.08.2026
+4. **A2** (Tastatur/Screenreader) + `user-scalable` entfernen ✅ 05.08.2026
+5. **C3** (Service-Worker-Disziplin) ✅ 05.08.2026
 6. **B2/B3** (make/unmake, iterative Vertiefung) — nur, wenn mehr Spielstärke
-   gewünscht ist
-7. **B4** (Transpositionstabelle) — optional
+   gewünscht ist ✅ 05.08.2026 (B3 ohne Zeitbudget, Begründung dort)
+7. **B4** (Transpositionstabelle) — optional ✅ 05.08.2026
+
+Dazu **C2** (Suchparameter in `CONFIG`) und **D** (Kleinigkeiten), beide
+✅ 05.08.2026. Damit ist die Liste abgearbeitet.
+
+## Was von Hand nachzuprüfen bleibt
+
+Die Tests decken die Logik ab, nicht die Anzeige. Im Browser nachzusehen:
+
+1. Tabulator ins Brett, mit den Pfeiltasten wandern, mit der Leertaste setzen —
+   der Fokusrahmen muss sichtbar sein und dem Zug folgen.
+2. Auf dem Handy mit zwei Fingern zoomen (muss gehen), Doppeltipp auf ein Feld
+   (darf nicht zoomen).
+3. Demo-Modus auf „Experte": Der Menü-Knopf muss während des Rechnens sofort
+   reagieren — das ist der eigentliche Zweck von A1.
+4. Während die KI rechnet „Neustart" drücken: Es darf kein Zug aus der alten
+   Partie nachkommen.
+5. Nach dem Neuladen prüfen, dass der neue Service Worker greift
+   (Entwicklertools → Application → Service Workers).

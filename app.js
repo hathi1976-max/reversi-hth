@@ -124,7 +124,11 @@ function render(flipped = []) {
     if (v !== EMPTY) {
       disc.classList.add(v === BLACK ? "black" : "white", "placed");
       if (flipSet.has(i)) {
-        // Animation neu anstoßen
+        // Animation neu anstoßen: Die Klasse wurde eine Zeile darüber entfernt
+        // und wird gleich wieder gesetzt – ohne erzwungenen Stilabgleich sähe
+        // der Browser gar keine Änderung und ließe die Animation aus.
+        // `getAnimations().cancel()` liest sich schöner, löst denselben
+        // Abgleich aber nicht aus.
         void disc.offsetWidth;
         disc.classList.add("flip");
       }
@@ -173,13 +177,36 @@ function updateTurnIndicator(thinking = false) {
   el.textContent = thinking ? `${who} (${color}) denkt` : `${who} (${color}) ist am Zug`;
 }
 
-let toastTimer = null;
+/* Meldungen laufen nacheinander durch, statt sich gegenseitig zu überschreiben:
+   Müssen beide Seiten kurz hintereinander passen, ginge sonst eine der beiden
+   Meldungen verloren. */
+const toastSchlange = [];
+let toastLaeuft = false;
+
 function toast(msg, ms = 1800) {
+  toastSchlange.push({ msg, ms });
+  if (!toastLaeuft) naechsterToast();
+}
+
+function naechsterToast() {
   const el = $("toast");
-  el.textContent = msg;
+  const eintrag = toastSchlange.shift();
+  if (!eintrag) { toastLaeuft = false; return; }
+
+  toastLaeuft = true;
+  el.textContent = eintrag.msg;
   el.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove("show"), ms);
+  setTimeout(() => {
+    el.classList.remove("show");
+    // Ausblenden abwarten (CSS: 0.25 s), sonst springt der Text im laufenden Übergang.
+    setTimeout(naechsterToast, 300);
+  }, eintrag.ms);
+}
+
+/** Wartende Meldungen verwerfen – nach Neustart gehören sie zur alten Partie. */
+function toastLeeren() {
+  toastSchlange.length = 0;
+  $("toast").classList.remove("show");
 }
 
 /* ============================================================
@@ -229,6 +256,7 @@ function getWorker() {
 function sessionEntwerten() {
   state.session++;
   offeneAnfrage = null;
+  toastLeeren();
   if (aiWorker && workerRechnet) {
     aiWorker.terminate();
     aiWorker = null;
