@@ -40,10 +40,16 @@ und wird von `app.js`, `ai-worker.js` und den Tests importiert.
 
 ### 2. KI
 
-- **Negamax mit Alpha-Beta-Schnitt** (`search`). Passen wird im Baum korrekt
-  behandelt (Zugrecht wechselt ohne Tiefenverbrauch); können beide Seiten
-  nicht ziehen, zählt der exakte Endstand (`finalScore`, hoch skaliert, damit
-  er jede Heuristik dominiert).
+- **Negamax mit Alpha-Beta-Schnitt** (`search`), make/unmake auf einem einzigen
+  Arbeitsbrett. Passen wird im Baum korrekt behandelt (Zugrecht wechselt ohne
+  Tiefenverbrauch); können beide Seiten nicht ziehen, zählt der exakte Endstand
+  (`finalScore`, hoch skaliert, damit er jede Heuristik dominiert).
+- **Transpositionstabelle** mit Zobrist-Schlüssel (64 Bit als zwei 32-Bit-
+  Hälften, zweite Hälfte als Kollisionsprüfung). Der gespeicherte Bestzug
+  sortiert innere Knoten vor.
+- **Iterative Vertiefung** in `bestMove`: Tiefe 1, 2, 3 … bis zur Zieltiefe der
+  Stufe, Bestzug der Vorrunde zuerst. Kein Zeitbudget — die Stufen sollen auf
+  jedem Gerät gleich stark spielen.
 - **Bewertung** (`evaluate`), aus Sicht des Ziehenden:
   - Feldgewichte (`WEIGHTS`): Ecken +120, Felder neben Ecken negativ
     (X-/C-Felder), klassische Othello-Matrix.
@@ -258,6 +264,61 @@ Offline-Rückfall. `skipWaiting()`/`clients.claim()` hängen jetzt in den
 **Von Hand nachzuprüfen** (geht nur im echten Browser): Tab bis ins Brett,
 mit den Pfeiltasten wandern, mit Leertaste setzen; Zoomen mit zwei Fingern auf
 dem Handy; und nach einem Neuladen, dass der neue Service Worker greift.
+
+### 05.08.2026 — B2/B3/B4: make/unmake, iterative Vertiefung, Transpositionstabelle
+
+**Geändert.**
+
+- **B2** – `search` arbeitet über `doMove`/`undoMove` auf einem einzigen
+  Arbeitsbrett statt auf einer Kopie je Knoten und stellt es vor der Rückkehr
+  wieder her. `bestMove` legt einmal je Zug eine Arbeitskopie an, das
+  übergebene Brett bleibt unberührt. Die Oberfläche nutzt für ihre Historie
+  weiter `applyMove`.
+- **B3** – `bestMove` vertieft iterativ (Tiefe 1, 2, 3 … bis zur Zieltiefe der
+  Stufe) und zieht den Bestzug der Vorrunde nach vorn. **Ohne Zeitbudget:**
+  Eine nach Wanduhr bemessene Tiefe machte die Spielstärke geräteabhängig und
+  jede Gegenprobe unmöglich; die Zieltiefen je Stufe bleiben unverändert.
+- **B4** – Transpositionstabelle mit Zobrist-Hashing. Der Schlüssel ist 64 Bit
+  breit, geführt als zwei 32-Bit-Hälften: Die `Map` schlägt über die erste
+  nach, die zweite prüft den Treffer gegen. Ein einzelner 32-Bit-Schlüssel
+  hätte bei hunderttausenden Knoten regelmäßig Kollisionen — und eine
+  Kollision liefert still eine falsche Bewertung. Gespeichert werden Tiefe,
+  Wert, Schrankenart und Bestzug; der Bestzug sortiert auch innere Knoten.
+
+**Gelernte Lektion: die Tabelle darf nicht über Suchen hinweg stehen bleiben.**
+In der ersten Fassung lieferte `search` je nach Vorgeschichte statt des exakten
+Wertes eine Schranke — 5 von 120 Werten wichen ab, einer um 380 Punkte. Ein
+Aufruf von außen (ohne Hash-Argumente) leert die Tabelle jetzt; innerhalb der
+Rekursion und über die Vertiefungsrunden hinweg bleibt sie stehen.
+
+**Gemessen (120 gesäte Stellungen).** Iterative Vertiefung **allein** war
+langsamer als die feste Tiefe (Stufe 3: 272 → 485 ms, Stufe 4: 4650 → 7008 ms).
+Die Gewichtssortierung ist bei Reversi so gut, dass die zusätzliche Ordnung an
+der Wurzel den Aufwand der Vorrunden nicht hereinholt. Erst zusammen mit der
+Tabelle, über die der Bestzug auch innere Knoten sortiert, trägt sie:
+
+| Messung                             | vorher  | nachher | Faktor |
+| ----------------------------------- | ------: | ------: | -----: |
+| `search` Tiefe 6, 120 Stellungen    | 3056 ms | 2690 ms |  1,14× |
+| Stufe 2 (Tiefe 2), 120 Züge         |   19 ms |   27 ms |  0,71× |
+| Stufe 3 (Tiefe 4), 120 Züge         |  288 ms |  335 ms |  0,86× |
+| Stufe 4 (Tiefe 6), 120 Züge         | 4595 ms | 3330 ms |  1,38× |
+| Stufe 4, fünf feste Stellungen      |  207 ms |  120 ms |  1,72× |
+
+Dass die flachen Stufen leicht verlieren, bleibt so: 0,07 ms (Stufe 2) bzw.
+0,4 ms (Stufe 3) je Zug gegen 350 ms Mindestanzeigedauer.
+
+**Gleichheit belegt.** `search(b, p, d, -∞, +∞)` über 120 Stellungen × Tiefen
+2/4/6 = 360 Werte, **alle exakt gleich** zur Fassung davor, Brett danach jedes
+Mal unverändert. Von 360 Zugentscheidungen weichen 11 ab; für jede wurde der
+Wert beider Züge mit der alten exakten Suche nachgerechnet — **11 von 11 exakt
+gleichwertig, 0 schlechter.** Es sind ausschließlich anders aufgelöste
+Gleichstände. Testlauf 67/67 grün, darunter neu eine Gegenrechnung von `search`
+gegen ein schlichtes Negamax ohne Alpha-Beta und ohne Tabelle.
+
+**Offen gelassen.** Stufe „Experte" braucht jetzt im Mittel 28 ms je Zug, eine
+Tiefe mehr wäre also bezahlbar. Das ist aber eine Entscheidung über die
+Spielstärke und keine Aufräumarbeit — die Zieltiefen bleiben unverändert.
 
 ## Ideen für später
 

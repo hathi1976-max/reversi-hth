@@ -8,7 +8,7 @@
  * Trotzdem gilt weiter: Bei jeder Änderung an ausgelieferten Dateien `CACHE`
  * hochzählen, damit installierte Apps den alten Bestand verwerfen.
  */
-const CACHE = "reversi-v4";
+const CACHE = "reversi-v5";
 const SHELL = [
   "./",
   "./index.html",

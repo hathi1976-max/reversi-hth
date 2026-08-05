@@ -109,6 +109,64 @@ gruppe('search', () => {
     }
   });
 
+  /* Unabhaengige Gegenrechnung: schlichtes Negamax ohne Alpha-Beta, ohne
+     Transpositionstabelle, ohne make/unmake. Liefert per Definition den
+     exakten Minimax-Wert - jede Abweichung von `search` waere ein Fehler in
+     der Zugsortierung, im Zobrist-Schluessel oder in der Zugruecknahme. */
+  function naiv(b, p, tiefe){
+    const zuege = legalMoves(b, p);
+    if (zuege.length === 0){
+      if (legalMoves(b, opponent(p)).length === 0) return finalScore(b, p);
+      return -naiv(b, opponent(p), tiefe);
+    }
+    if (tiefe <= 0) return evaluate(b, p);
+    let best = -Infinity;
+    for (const m of zuege){
+      const w = -naiv(applyMove(b, m.idx, m.flips, p), opponent(p), tiefe - 1);
+      if (w > best) best = w;
+    }
+    return best;
+  }
+
+  function nachZuegen(n){
+    let b = initialBoard(), p = BLACK;
+    for (let i = 0; i < n; i++){
+      const z = legalMoves(b, p);
+      if (z.length === 0){ p = opponent(p); continue; }
+      b = applyMove(b, z[0].idx, z[0].flips, p);
+      p = opponent(p);
+    }
+    return { board: b, p };
+  }
+
+  test('stimmt mit schlichtem Negamax ueberein', () => {
+    for (const n of [0, 5, 12, 20]){
+      const { board, p } = nachZuegen(n);
+      for (const tiefe of [1, 2, 3]){
+        gleich(
+          search(board, p, tiefe, -Infinity, Infinity),
+          naiv(board, p, tiefe),
+          `nach ${n} Zuegen, Tiefe ${tiefe}`
+        );
+      }
+    }
+  });
+
+  test('gibt das Brett unveraendert zurueck (make/unmake)', () => {
+    const { board, p } = nachZuegen(12);
+    const vorher = Array.from(board);
+    search(board, p, 4, -Infinity, Infinity);
+    tiefGleich(Array.from(board), vorher);
+  });
+
+  test('liefert bei wiederholtem Aufruf denselben Wert', () => {
+    const { board, p } = nachZuegen(8);
+    const a = search(board, p, 4, -Infinity, Infinity);
+    const b = search(board, p, 4, -Infinity, Infinity);
+    const c = search(board, p, 4, -Infinity, Infinity);
+    gleich(a, b); gleich(b, c);
+  });
+
   test('Passen verbraucht keine Tiefe und wechselt das Zugrecht', () => {
     // Weiss kann nicht ziehen, Schwarz schon: der Wert muss aus Schwarz'
     // Fortsetzung stammen, nicht aus einer Bewertung der Passstellung.

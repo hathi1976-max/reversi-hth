@@ -180,7 +180,25 @@ beim ersten gefundenen Richtungstreffer `true` zurückgibt, statt alle acht
 Richtungen zu Ende zu laufen und ein Array zu füllen. Erwartbar ein Vielfaches
 an Geschwindigkeit — und damit eine Tiefe mehr bei gleicher Wartezeit.
 
-### B2. `applyMove` kopiert das Brett in jedem Knoten
+### B2. `applyMove` kopiert das Brett in jedem Knoten — ✅ erledigt 05.08.2026
+
+> **Behoben.** `search` arbeitet über `doMove`/`undoMove` auf einem einzigen
+> Arbeitsbrett und stellt es vor der Rückkehr wieder her; `bestMove` legt dafür
+> einmal je Zug eine Kopie an, damit das übergebene Brett unberührt bleibt.
+> `makeMove` in der Oberfläche benutzt weiter `applyMove` — wie im Review
+> vorgesehen, die Historie braucht Momentaufnahmen.
+>
+> **Der erhoffte Gewinn bleibt aus:** Über 120 Stellungen gemessen ist
+> `search` mit make/unmake **nicht messbar schneller** (Tiefe 6: 3087 → 3024 ms,
+> 1,02× — Rauschen). `board.slice()` auf 64 Byte ist offenbar so billig, dass
+> die Speicherbereinigung nicht ins Gewicht fällt. Die Umstellung bleibt
+> trotzdem drin: Sie kostet nichts, und ohne sie hätte die
+> Transpositionstabelle (B4) den Hash je Knoten neu berechnen müssen.
+>
+> **Gleichheit belegt:** `search(b, p, d, -∞, +∞)` über 120 Stellungen × Tiefen
+> 2/4/6 = **360 Werte, alle exakt gleich** zur Fassung davor; das Brett ist
+> danach jedes Mal unverändert. `tests/ki.test.js` rechnet zusätzlich gegen ein
+> schlichtes Negamax ohne Alpha-Beta gegen.
 
 **Wo:** `:63-68`, aufgerufen in `search:147` und `bestMove:192`
 
@@ -196,7 +214,46 @@ function undoMove(b, idx, flips, opp){ b[idx] = EMPTY; for (const f of flips) b[
 Nur in `search` ändern; `makeMove` in der Oberfläche (`:336-341`) braucht weiter
 Momentaufnahmen für die Historie und bleibt wie es ist.
 
-### B3. Feste Suchtiefe statt iterativer Vertiefung
+### B3. Feste Suchtiefe statt iterativer Vertiefung — ✅ erledigt 05.08.2026 (mit Abweichung)
+
+> **Umgesetzt: iterative Vertiefung. Nicht umgesetzt: das Zeitbudget.**
+> `bestMove` rechnet Tiefe 1, 2, 3 … bis zur Zieltiefe der Stufe und zieht den
+> Bestzug einer Runde in der nächsten nach vorn.
+>
+> **Warum kein Zeitbudget:** Eine nach Wanduhr gemessene Tiefe macht die
+> Spielstärke geräteabhängig — „Experte" wäre auf dem Rechner ein anderer
+> Gegner als auf dem Handy, und dieselbe Stellung ergäbe zweimal einen anderen
+> Zug. Bei einer beschrifteten Schwierigkeitsstufe ist das ein Fehler, kein
+> Merkmal. Auch die Tests und jede Gegenprobe verlören ihre Grundlage. Die
+> Zieltiefen je Stufe bleiben deshalb, wie sie waren.
+>
+> **Gemessen — der Vorschlag trägt sich erst mit B4:** Iterative Vertiefung
+> allein war **langsamer** als die feste Tiefe (120 Stellungen: Stufe 3
+> 272 → 485 ms, Stufe 4 4650 → 7008 ms, also 0,56× bzw. 0,66×). Die
+> Gewichtssortierung ist bei Reversi schon so gut, dass die zusätzliche
+> Ordnung an der Wurzel den Aufwand der Vorrunden nicht hereinholt. Erst mit
+> der Transpositionstabelle (B4), über die der Bestzug auch **innere** Knoten
+> sortiert, dreht sich das Bild:
+>
+> | Stufe | vorher | mit B2+B3+B4 | Faktor |
+> | ----- | -----: | -----------: | -----: |
+> | 2 (Tiefe 2) |   19 ms |   27 ms | 0,71× |
+> | 3 (Tiefe 4) |  288 ms |  335 ms | 0,86× |
+> | 4 (Tiefe 6) | 4595 ms | 3330 ms | **1,38×** |
+> | 4, fünf feste Stellungen | 207 ms | 120 ms | **1,72×** |
+>
+> Dass die flachen Stufen leicht verlieren, bleibt so: Es sind 0,07 ms (Stufe 2)
+> bzw. 0,4 ms (Stufe 3) je Zug gegen eine Mindestanzeigedauer von 350 ms. Eine
+> Sonderregel „ab Tiefe 5 vertiefen" wäre mehr Code als Nutzen.
+>
+> **Keine Verschlechterung der Spielstärke:** Von 360 Zugentscheidungen weichen
+> 11 ab. Für jede einzelne wurde der Wert beider Züge mit der alten,
+> exakten Suche auf der Zieltiefe nachgerechnet: **11 von 11 exakt gleichwertig,
+> 0 schlechter.** Es sind ausschließlich anders aufgelöste Gleichstände.
+>
+> **Nebenbemerkung:** Stufe „Experte" braucht jetzt im Mittel 28 ms je Zug.
+> Eine Tiefe mehr wäre also bezahlbar — das ist aber eine Entscheidung über die
+> Spielstärke, keine Aufräumarbeit, und bleibt beim Nutzer.
 
 **Wo:** `LEVELS` (`:157-162`)
 
@@ -211,7 +268,37 @@ Leicht 0 ms/zufällig, Mittel 150 ms, Schwer 600 ms, Experte 2.000 ms). Nebeneff
 Die Zugsortierung kann den Bestzug der Vorrunde zuerst probieren, was die
 Alpha-Beta-Schnitte deutlich verbessert.
 
-### B4. Keine Transpositionstabelle
+### B4. Keine Transpositionstabelle — ✅ erledigt 05.08.2026
+
+> **Behoben.** Zobrist-Hashing über 64 Felder × 2 Farben plus Zugrecht, `Map`
+> mit Tiefe, Wert, Schrankenart (exakt / Unter- / Obergrenze) und Bestzug.
+> Der Schlüssel wird beim Zug **fortgeschrieben** statt neu berechnet.
+>
+> **Der Schlüssel ist 64 Bit breit, geführt als zwei 32-Bit-Hälften.** Ein
+> einzelner 32-Bit-Wert hätte bei einigen hunderttausend Knoten je Zug
+> regelmäßig Kollisionen — und eine Kollision liefert still eine falsche
+> Bewertung. Die `Map` schlägt über die erste Hälfte nach, die zweite prüft den
+> Treffer gegen.
+>
+> **Gefundene Falle:** Eine dauerhaft stehende Tabelle macht `search` von
+> früheren Aufrufen abhängig — mit fremden Schranken im Fenster liefert die
+> Funktion statt des exakten Wertes eine Schranke. In der ersten Fassung wichen
+> dadurch 5 von 120 Werten ab (einmal −203 gegen −583). Behoben: Ein Aufruf
+> **von außen** (ohne Hash-Argumente) leert die Tabelle; innerhalb der Rekursion
+> und über die Vertiefungsrunden hinweg bleibt sie stehen, `bestMove` leert
+> einmal je Zug. Damit ist `search(b, p, d, -∞, +∞)` wieder exakt.
+>
+> **Wirkung:** `search` allein auf Tiefe 6 1,14×; zusammen mit der iterativen
+> Vertiefung (B3) Stufe „Experte" 1,38× über 120 Stellungen und 1,72× auf den
+> fünf festen Stellungen. Das liegt unter dem im Review erwarteten Faktor 2–3 —
+> bei Reversi entstehen weniger Zugumstellungen als etwa im Schach, weil Steine
+> nicht wandern.
+>
+> **Gleichheit belegt:** 360 `search`-Werte exakt gleich zur Fassung ohne
+> Tabelle; die 11 abweichenden Zugentscheidungen sind exakt gleichwertig
+> (s. B3). `tests/ki.test.js` prüft `search` zusätzlich gegen ein schlichtes
+> Negamax ohne Tabelle und ohne Alpha-Beta, dazu Idempotenz bei wiederholtem
+> Aufruf.
 
 Dieselbe Stellung wird über verschiedene Zugreihenfolgen mehrfach bewertet.
 
