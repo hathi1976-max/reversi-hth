@@ -97,7 +97,9 @@
   </main>
 
   <!-- ===== Spielende ===== -->
-  <div id="gameover" class="overlay">
+  <!-- inert von Anfang an: sonst sind die Endstand-Knöpfe schon im Menü über
+       Tab erreichbar. Danach pflegt zeigeOverlay() in app.js das Attribut. -->
+  <div id="gameover" class="overlay" inert>
     <div class="panel">
       <h2 id="result-title">Spiel beendet</h2>
       <div class="final-score">

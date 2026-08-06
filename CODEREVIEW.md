@@ -488,7 +488,39 @@ bereits macht.
 Dazu **C2** (Suchparameter in `CONFIG`) und **D** (Kleinigkeiten), beide
 ✅ 05.08.2026. Damit ist die Liste abgearbeitet.
 
-## Was von Hand nachzuprüfen bleibt
+## Was von Hand nachzuprüfen bleibt — ✅ durchgeführt 06.08.2026
+
+> **Ergebnis: vier von fünf Punkten ohne Beanstandung, einer hat einen Fehler
+> zutage gefördert** (Punkt 1, behoben, `v7`).
+>
+> | Punkt | Ergebnis |
+> |---|---|
+> | 1. Tastatur | Pfeiltasten und Enter arbeiten wie beschrieben, Fokusrahmen sichtbar (2,4 px), Roving Tabindex hält genau ein Feld erreichbar, die Live-Region meldet nach jedem Zug den Stand. **Aber:** bei laufendem Spiel führten die ersten **zwölf** Tab-Schritte durch das unsichtbare Menü — siehe unten. |
+> | 2. Zoom | `user-scalable=no` und `maximum-scale` sind aus dem Viewport-Tag verschwunden, `touch-action: manipulation` liegt auf Feldern und Schaltflächen, nicht auf `body`. Zwei-Finger-Zoom bleibt also möglich, Doppeltipp zoomt nicht. Am echten Gerät nicht nachstellbar — geprüft wurde die Ursache, nicht die Geste. |
+> | 3. Menü während der Rechnung | Ein Klick auf „Menü" wird **im selben Task** verarbeitet (0 ms), das Menü ist sofort offen. Zusätzlich gemessen: während der Worker eine Endspielstellung (13 leere Felder, Stufe Experte) 256 ms lang durchrechnet, verarbeitet der Hauptthread 34 133 Aufgaben, größte Lücke **4 ms**. Genau dafür ist A1 da. |
+> | 4. Neustart während der Rechnung | Menschlicher Zug (4:1), im selben Task „Neu" — Brett steht sofort wieder auf 2:2 und bleibt es auch nach 2,5 s. Die Antwort des Workers aus der alten Partie wird über `session` verworfen. |
+> | 5. Service-Worker-Update | Cache-Namen testweise auf `v7` gesetzt, `update()` + Neuladen: nur noch `reversi-v7` vorhanden (`v6` gelöscht), alle neun Shell-Dateien darin, die Seite wird vom neuen Worker gesteuert. Rückweg auf `v6` genauso sauber. |
+>
+> **Gefunden bei Punkt 1: geschlossene Überlagerungen blieben in der
+> Tab-Reihenfolge.** `.overlay` versteckt nur über `opacity: 0` und
+> `pointer-events: none` — beides nimmt Elemente **nicht** aus der
+> Tabulator-Reihenfolge. Bei laufendem Spiel lauteten die ersten dreizehn
+> Tab-Stationen: „Gegen Computer", „Zwei Spieler", „Demo", „Leicht", „Mittel",
+> „Schwer", „Experte", „Schwarz", „Weiß", „Schwarz/Weiß", „Rot/Blau", „Spiel
+> starten" — und erst dann das Brett. Ein Tastaturnutzer konnte dort auch
+> **auslösen**: Enter auf dem unsichtbaren „Spiel starten" warf die laufende
+> Partie weg. Für Sehende war nichts davon zu erkennen.
+>
+> **Behoben** mit dem `inert`-Attribut: `zeigeOverlay(id, sichtbar)` in `app.js`
+> setzt Klasse und `inert` gemeinsam, `#gameover` startet schon im HTML als
+> `inert`. Bewusst nicht über `visibility: hidden` gelöst — das hätte an der
+> 0,25-s-Blende gehangen, und die Tab-Reihenfolge sollte nicht von einer
+> Animation abhängen.
+>
+> **Gegenprobe:** Tab-Folge bei laufendem Spiel jetzt Brett → „Menü" → „Neu" →
+> Brett; das Menü bleibt im geöffneten Zustand voll bedienbar, und am Spielende
+> ist der Endstand-Dialog wieder erreichbar (Demo bis 52:12 durchlaufen).
+> Alle 67 Tests weiter grün.
 
 Die Tests decken die Logik ab, nicht die Anzeige. Im Browser nachzusehen:
 

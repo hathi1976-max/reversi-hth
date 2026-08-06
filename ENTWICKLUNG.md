@@ -342,6 +342,36 @@ Spielstärke und keine Aufräumarbeit — die Zieltiefen bleiben unverändert.
 
 `sw.js`: `CACHE` auf `reversi-v6`.
 
+### 06.08.2026 — die fünf Handprüfungen, und was dabei herauskam
+
+Die Prüfliste am Ende von `CODEREVIEW.md` abgearbeitet. Vier Punkte ohne
+Beanstandung (Zahlen dort), einer brachte einen echten Fehler ans Licht.
+
+**Geschlossene Überlagerungen blieben in der Tab-Reihenfolge.** `.overlay`
+versteckt über `opacity: 0` und `pointer-events: none`. Beides betrifft nur
+Auge und Maus — für die Tabulatortaste sind die Elemente weiterhin da. Bei
+laufendem Spiel führten die ersten **zwölf** Tab-Schritte deshalb durch das
+unsichtbare Menü, bevor der Fokus das Brett erreichte, und Enter löste dort
+scharfe Aktionen aus: „Spiel starten" warf die laufende Partie weg, ohne dass
+irgendetwas zu sehen war. Ausgerechnet der Befund, der die Tastaturbedienung
+überhaupt erst gebracht hat (A2), hatte diese Lücke hinterlassen — sie fällt
+nur auf, wenn man wirklich Tab drückt, statt die Struktur zu prüfen.
+
+**Behoben** mit `inert`: `zeigeOverlay(id, sichtbar)` setzt Klasse und Attribut
+gemeinsam (acht Aufrufstellen, keine `classList`-Umschaltung mehr im Code),
+`#gameover` trägt `inert` schon im HTML, weil vor dem ersten Spiel niemand die
+Funktion gerufen hat.
+
+Der naheliegende CSS-Weg — `visibility: hidden` mit `transition: visibility 0s
+0.25s` — wurde verworfen: er hängt die Tab-Reihenfolge an das Ende einer
+Animation. Läuft die Blende nicht (Hintergrund-Tab, unterbrochenes Rendern),
+bleibt die Überlagerung fokussierbar. `inert` wirkt sofort und unabhängig davon.
+
+**Gegenprobe:** Tab-Folge bei laufendem Spiel jetzt Brett → „Menü" → „Neu" →
+Brett. Das geöffnete Menü bleibt voll bedienbar, der Endstand-Dialog wird am
+Spielende wieder erreichbar (Demo bis 52:12 durchlaufen), alle 67 Tests grün.
+`CACHE` auf `reversi-v7`.
+
 ## Ideen für später
 
 - Online-Mehrspieler (braucht einen kleinen Server, z. B. WebSocket-Relay)

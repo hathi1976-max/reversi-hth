@@ -43,6 +43,19 @@ const $ = (id) => document.getElementById(id);
 const boardEl = $("board");
 const cells = [];
 
+/** Überlagerung (Menü, Endstand) ein- oder ausblenden.
+ *
+ * `inert` gehört dazu: Eine Überlagerung, die nur über `opacity: 0` verschwindet,
+ * bleibt in der Tab-Reihenfolge. Bei laufendem Spiel führten die ersten zwölf
+ * Tab-Schritte deshalb durch das unsichtbare Menü, bevor der Fokus das Brett
+ * erreichte — und die Enter-Taste löste dort echte Menüaktionen aus.
+ */
+function zeigeOverlay(id, sichtbar) {
+  const el = $(id);
+  el.classList.toggle("visible", sichtbar);
+  el.inert = !sichtbar;
+}
+
 function buildBoard() {
   for (let r = 0; r < 8; r++) {
     // Die Zeile ist reine ARIA-Struktur; display:contents hält sie aus dem
@@ -302,8 +315,8 @@ function startGame() {
   $("btn-pause").hidden = state.mode !== "demo";
   $("btn-pause").textContent = "Pause";
 
-  $("menu").classList.remove("visible");
-  $("gameover").classList.remove("visible");
+  zeigeOverlay("menu", false);
+  zeigeOverlay("gameover", false);
   $("game").hidden = false;
 
   // Tastaturfokus auf einen spielbaren Zug legen, damit die erste Pfeiltaste
@@ -409,7 +422,7 @@ function undo() {
   state.current = snap.current;
   state.lastMove = snap.lastMove;
   state.over = false;
-  $("gameover").classList.remove("visible");
+  zeigeOverlay("gameover", false);
   render();
   updateTurnIndicator();
   ansage();
@@ -432,7 +445,7 @@ function showGameOver() {
   }
   $("result-title").textContent = title;
   $("result-text").textContent = text;
-  $("gameover").classList.add("visible");
+  zeigeOverlay("gameover", true);
 }
 
 /* ---------- Menü ---------- */
@@ -491,15 +504,15 @@ function init() {
   $("btn-undo").addEventListener("click", undo);
   $("btn-to-menu").addEventListener("click", () => {
     sessionEntwerten();
-    $("gameover").classList.remove("visible");
+    zeigeOverlay("gameover", false);
     $("game").hidden = true;
-    $("menu").classList.add("visible");
+    zeigeOverlay("menu", true);
   });
   $("btn-menu").addEventListener("click", () => {
     sessionEntwerten();
     state.busy = false;
     $("game").hidden = true;
-    $("menu").classList.add("visible");
+    zeigeOverlay("menu", true);
   });
   $("btn-pause").addEventListener("click", () => {
     state.demoPaused = !state.demoPaused;

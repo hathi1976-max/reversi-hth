@@ -68,6 +68,9 @@ body {
   justify-content: center;
   padding: 16px;
   opacity: 0;
+  /* Unsichtbar heißt auch: nicht bedienbar und nicht in der Tab-Reihenfolge.
+     pointer-events regelt die Maus, den Tastaturfokus nimmt das inert-Attribut,
+     das `zeigeOverlay()` in app.js zusammen mit .visible setzt. */
   pointer-events: none;
   transition: opacity 0.25s;
   z-index: 20;
